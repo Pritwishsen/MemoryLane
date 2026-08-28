@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import GoogleGlyph from "./GoogleGlyph";
 
 type SignInScreenProps = {
@@ -9,6 +12,11 @@ const HELPER_TEXT: Record<SignInScreenProps["variant"], string | null> = {
   host: "Your albums stay private until you invite someone.",
   guest:
     "Guests: you'll only see albums the host has shared their photos with you for.",
+};
+
+const CALLBACK_URL: Record<SignInScreenProps["variant"], string> = {
+  host: "/dashboard",
+  guest: "/guest",
 };
 
 export default function SignInScreen({ variant }: SignInScreenProps) {
@@ -28,12 +36,9 @@ export default function SignInScreen({ variant }: SignInScreenProps) {
           Sign in to continue
         </h1>
 
-        {/*
-          TODO(Phase 2): wire this up to NextAuth's Google provider (signIn("google")).
-          Left as a non-functional placeholder for now, per the phased build plan.
-        */}
         <button
           type="button"
+          onClick={() => signIn("google", { callbackUrl: CALLBACK_URL[variant] })}
           className="border-ink/10 text-ink mt-8 flex w-full items-center justify-center gap-3 rounded-full border bg-white px-6 py-3 font-medium shadow-sm transition hover:shadow-md"
         >
           <GoogleGlyph />

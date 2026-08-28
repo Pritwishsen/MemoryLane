@@ -1,0 +1,184 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import SortablePageRow from "./SortablePageRow";
+import type { Album, Page } from "@/types/models";
+
+type AlbumEditorClientProps = {
+  album: Album;
+  initialPages: Page[];
+};
+
+export default function AlbumEditorClient({
+  album,
+  initialPages,
+}: AlbumEditorClientProps) {
+  const [title, setTitle] = useState(album.title);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [pages, setPages] = useState(initialPages);
+  const [addingPage, setAddingPage] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor));
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  async function handleTitleSave() {
+    setEditingTitle(false);
+    const trimmed = title.trim();
+    if (!trimmed || trimmed === album.title) {
+      setTitle(album.title);
+      return;
+    }
+    await fetch(`/api/albums/${album.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: trimmed }),
+    });
+  }
+
+  async function handleAddPage() {
+    setAddingPage(true);
+    try {
+      const res = await fetch(`/api/albums/${album.id}/pages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ header: "Untitled" }),
+      });
+      if (!res.ok) throw new Error("Failed to add page");
+      const { page } = await res.json();
+      setPages((prev) => [...prev, page]);
+    } finally {
+      setAddingPage(false);
+    }
+  }
+
+  function handlePageDeleted(pageId: string) {
+    setPages((prev) => prev.filter((p) => p.id !== pageId));
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = pages.findIndex((p) => p.id === active.id);
+    const newIndex = pages.findIndex((p) => p.id === over.id);
+    const reordered = arrayMove(pages, oldIndex, newIndex);
+    setPages(reordered);
+
+    await fetch(`/api/albums/${album.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageOrder: reordered.map((p) => p.id) }),
+    });
+  }
+
+  return (
+    <main className="flex-1 px-5 py-6 sm:px-8">
+      <div className="mx-auto w-full max-w-[720px]">
+        <Link href="/dashboard" className="font-meta-label text-ink-soft hover:text-ink">
+          ← Albums
+        </Link>
+
+        <div className="mt-4">
+          {editingTitle ? (
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              className="font-display text-ink border-teal w-full border-b bg-transparent text-2xl font-semibold focus:outline-none"
+            />
+          ) : (
+            <h1
+              onClick={() => setEditingTitle(true)}
+              className="font-display text-ink cursor-text text-2xl font-semibold"
+              title="Click to rename"
+            >
+              {title}
+            </h1>
+          )}
+          <p className="text-ink-soft mt-1 text-sm">
+            {pages.length} {pages.length === 1 ? "page" : "pages"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled
+          title="Coming soon"
+          className="border-brass text-brass mt-4 rounded-full border px-5 py-2 text-sm font-medium opacity-50"
+        >
+          Invite guests
+        </button>
+
+        <div className="mt-8 flex items-center justify-between">
+          <h2 className="font-display text-ink text-lg font-semibold">Pages</h2>
+          <button
+            type="button"
+            onClick={handleAddPage}
+            disabled={addingPage}
+            className="font-meta-label text-teal"
+          >
+            {addingPage ? "adding…" : "+ add page"}
+          </button>
+        </div>
+        <hr className="border-ink/10 mt-3" />
+
+        {pages.length === 0 ? (
+          <p className="text-ink-soft mt-6 text-center text-sm">
+            This album is empty. Add your first page to get started.
+          </p>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={pages.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className="mt-4 flex flex-col gap-2">
+                {pages.map((page) => (
+                  <SortablePageRow
+                    key={page.id}
+                    page={page}
+                    albumId={album.id}
+                    onDeleted={handlePageDeleted}
+                    onCopied={setToast}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
+        )}
+      </div>
+
+      {toast && (
+        <div className="bg-ink font-meta-label fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-xs text-white shadow-lg">
+          {toast}
+        </div>
+      )}
+    </main>
+  );
+}
