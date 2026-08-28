@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --color-paper: #f3ede4;
+  --color-paper-dim: #e7dfcc;
+  --color-ink: #22201b;
+  --color-ink-soft: #55524a;
+  --color-teal: #1f4e4a;
+  --color-brass: #b58a46;
+  --color-stamp: #a6402c;
+}
+
+@theme inline {
+  --color-paper: var(--color-paper);
+  --color-paper-dim: var(--color-paper-dim);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-teal: var(--color-teal);
+  --color-brass: var(--color-brass);
+  --color-stamp: var(--color-stamp);
+
+  --font-display: var(--font-fraunces);
+  --font-body: var(--font-inter);
+  --font-meta: var(--font-space-mono);
+
+  --radius-card: 10px;
+  --radius-photo: 4px;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* Meta text convention (slugs, timestamps, counts, stamps, badges): Space Mono,
+   always uppercase with wide letter-spacing — bundled as one utility so every
+   use of the meta font automatically gets the tracking/casing that goes with it. */
+.font-meta-label {
+  font-family: var(--font-meta);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
