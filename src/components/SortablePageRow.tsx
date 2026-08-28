@@ -71,10 +71,23 @@ export default function SortablePageRow({
           ⠿
         </button>
 
-        <button
-          type="button"
+        {/*
+          A native <button> can't contain another <button> (the copy-link
+          icon below) — that's invalid HTML and breaks hydration. This div
+          plays the "click to open the page editor" role instead, with the
+          ARIA/keyboard bits a real button gets for free added by hand.
+        */}
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => router.push(`/dashboard/${albumId}/page/${page.id}`)}
-          className="min-w-0 flex-1 text-left"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              router.push(`/dashboard/${albumId}/page/${page.id}`);
+            }
+          }}
+          className="min-w-0 flex-1 cursor-pointer text-left"
         >
           <div className="text-ink truncate font-medium">{page.header}</div>
           {page.locationName && (
@@ -96,7 +109,7 @@ export default function SortablePageRow({
               📋
             </button>
           </div>
-        </button>
+        </div>
 
         {confirmingDelete ? (
           <div className="flex shrink-0 items-center gap-2 text-sm">

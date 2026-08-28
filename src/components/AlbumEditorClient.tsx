@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   closestCenter,
@@ -27,11 +28,14 @@ export default function AlbumEditorClient({
   album,
   initialPages,
 }: AlbumEditorClientProps) {
+  const router = useRouter();
   const [title, setTitle] = useState(album.title);
   const [editingTitle, setEditingTitle] = useState(false);
   const [pages, setPages] = useState(initialPages);
   const [addingPage, setAddingPage] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [confirmingDeleteAlbum, setConfirmingDeleteAlbum] = useState(false);
+  const [deletingAlbum, setDeletingAlbum] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -73,6 +77,18 @@ export default function AlbumEditorClient({
 
   function handlePageDeleted(pageId: string) {
     setPages((prev) => prev.filter((p) => p.id !== pageId));
+  }
+
+  async function handleDeleteAlbum() {
+    setDeletingAlbum(true);
+    try {
+      const res = await fetch(`/api/albums/${album.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete album");
+      router.push("/dashboard");
+    } catch {
+      setDeletingAlbum(false);
+      setConfirmingDeleteAlbum(false);
+    }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -172,6 +188,44 @@ export default function AlbumEditorClient({
             </SortableContext>
           </DndContext>
         )}
+
+        <hr className="border-ink/10 mt-10" />
+        <div className="mt-4">
+          {confirmingDeleteAlbum ? (
+            <div className="border-stamp/30 rounded-card border bg-white p-4">
+              <p className="text-ink text-sm">
+                Delete <strong>{title}</strong> and all {pages.length}{" "}
+                {pages.length === 1 ? "page" : "pages"} in it? This can&rsquo;t
+                be undone.
+              </p>
+              <div className="mt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleDeleteAlbum}
+                  disabled={deletingAlbum}
+                  className="text-stamp text-sm font-medium"
+                >
+                  {deletingAlbum ? "Deleting…" : "Delete album"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDeleteAlbum(false)}
+                  className="text-ink-soft text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingDeleteAlbum(true)}
+              className="border-stamp/40 text-stamp hover:bg-stamp/5 rounded-full border px-4 py-1.5 text-sm font-medium"
+            >
+              Delete album
+            </button>
+          )}
+        </div>
       </div>
 
       {toast && (

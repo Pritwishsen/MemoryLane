@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
-import { getOwnedAlbum, listPages, renameAlbum, reorderPages } from "@/lib/albums";
+import {
+  deleteAlbum,
+  getOwnedAlbum,
+  listPages,
+  renameAlbum,
+  reorderPages,
+} from "@/lib/albums";
 
 type RouteContext = { params: Promise<{ albumId: string }> };
 
@@ -51,5 +57,19 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     await renameAlbum(albumId, title);
   }
 
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(_req: NextRequest, { params }: RouteContext) {
+  const { session, unauthorized } = await requireSession();
+  if (unauthorized) return unauthorized;
+
+  const { albumId } = await params;
+  const album = await getOwnedAlbum(albumId, session.uid);
+  if (!album) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await deleteAlbum(albumId);
   return NextResponse.json({ ok: true });
 }

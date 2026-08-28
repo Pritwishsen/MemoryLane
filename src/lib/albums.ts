@@ -102,3 +102,14 @@ export async function reorderPages(
 export async function renameAlbum(albumId: string, title: string): Promise<void> {
   await albumsCol().doc(albumId).update({ title });
 }
+
+/** Firestore doesn't cascade-delete subcollections — the pages under an
+ *  album have to be deleted explicitly or they'd become permanently
+ *  unreachable (still billed, never shown) orphans. */
+export async function deleteAlbum(albumId: string): Promise<void> {
+  const pagesSnap = await pagesCol(albumId).get();
+  const batch = getAdminDb().batch();
+  pagesSnap.docs.forEach((doc) => batch.delete(doc.ref));
+  batch.delete(albumsCol().doc(albumId));
+  await batch.commit();
+}
