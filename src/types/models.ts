@@ -8,7 +8,13 @@ export type Album = {
   pageOrder: string[];
 };
 
-export type ImageFilter = "all" | "starred" | "tagged";
+/** No "starred" option — Drive's starred flag is per-viewing-account, not a
+ *  shared file property, so it can never reflect the host's curation to a
+ *  guest (a guest's own starred list is separate and almost always empty).
+ *  "tagged" (matching each file's description) is the equivalent that
+ *  actually works cross-account, since description is visible to anyone
+ *  with read access to the file. */
+export type ImageFilter = "all" | "tagged";
 export type DisplayMode = "grid" | "slideshow";
 
 export type Page = {
@@ -17,13 +23,24 @@ export type Page = {
   nfcSlug: string;
   header: string;
   bodyText: string;
-  locationName: string;
+  place: string;
+  country: string;
   lat: number | null;
   lng: number | null;
-  driveFolderId: string;
+  /** Photos are pooled from every folder here (dedup'd by file id) — a page
+   *  isn't limited to a single Drive folder. */
+  driveFolderIds: string[];
   imageFilter: ImageFilter;
   tagKeyword: string;
+  /** Only meaningful when imageFilter === "all" — instead of always showing
+   *  every photo in the folder, pick a fresh random subset (size randomLimit)
+   *  each time the page is viewed. */
+  randomizeAll: boolean;
+  randomLimit: number;
   displayMode: DisplayMode;
+  /** Slideshow auto-advance delay, in seconds. Only meaningful when
+   *  displayMode === "slideshow". */
+  slideshowIntervalSec: number;
   createdAt: string;
   updatedAt: string;
 };

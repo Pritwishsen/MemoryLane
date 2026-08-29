@@ -6,6 +6,10 @@ import GoogleGlyph from "./GoogleGlyph";
 
 type SignInScreenProps = {
   variant: "host" | "guest";
+  /** Overrides the variant's default post-sign-in destination — used by
+   *  `/p/[nfcSlug]` so a signed-out guest lands back on the same tag link
+   *  they scanned, instead of the generic `/guest` placeholder. */
+  callbackUrl?: string;
 };
 
 const HELPER_TEXT: Record<SignInScreenProps["variant"], string | null> = {
@@ -19,8 +23,9 @@ const CALLBACK_URL: Record<SignInScreenProps["variant"], string> = {
   guest: "/guest",
 };
 
-export default function SignInScreen({ variant }: SignInScreenProps) {
+export default function SignInScreen({ variant, callbackUrl }: SignInScreenProps) {
   const helperText = HELPER_TEXT[variant];
+  const resolvedCallbackUrl = callbackUrl ?? CALLBACK_URL[variant];
 
   return (
     <main className="flex min-h-full flex-1 flex-col items-center justify-center px-5 py-8 sm:px-8">
@@ -38,7 +43,7 @@ export default function SignInScreen({ variant }: SignInScreenProps) {
 
         <button
           type="button"
-          onClick={() => signIn("google", { callbackUrl: CALLBACK_URL[variant] })}
+          onClick={() => signIn("google", { callbackUrl: resolvedCallbackUrl })}
           className="border-ink/10 text-ink mt-8 flex w-full items-center justify-center gap-3 rounded-full border bg-white px-6 py-3 font-medium shadow-sm transition hover:shadow-md"
         >
           <GoogleGlyph />

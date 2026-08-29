@@ -90,9 +90,9 @@ export default function SortablePageRow({
           className="min-w-0 flex-1 cursor-pointer text-left"
         >
           <div className="text-ink truncate font-medium">{page.header}</div>
-          {page.locationName && (
+          {(page.place || page.country) && (
             <div className="text-ink-soft truncate text-sm">
-              {page.locationName}
+              {[page.place, page.country].filter(Boolean).join(", ")}
             </div>
           )}
           <div className="font-meta-label text-ink-soft mt-1 flex items-center gap-2 text-[0.6rem]">

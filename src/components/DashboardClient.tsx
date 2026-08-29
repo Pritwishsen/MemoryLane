@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { signOut } from "next-auth/react";
+import AccountBadge from "./AccountBadge";
 import type { Album } from "@/types/models";
 
 type DashboardClientProps = {
@@ -54,26 +53,7 @@ export default function DashboardClient({
           <span className="font-display text-ink text-lg font-bold">
             MemoryLane
           </span>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
-            title={userName ? `Sign out (${userName})` : "Sign out"}
-            className="border-ink/10 h-9 w-9 overflow-hidden rounded-full border"
-          >
-            {userImage ? (
-              <Image
-                src={userImage}
-                alt={userName ?? "Your account"}
-                width={36}
-                height={36}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="bg-paper-dim flex h-full w-full items-center justify-center text-xs">
-                {userName?.[0] ?? "?"}
-              </span>
-            )}
-          </button>
+          <AccountBadge name={userName} image={userImage} />
         </div>
 
         <div className="mt-10 flex items-center justify-between">

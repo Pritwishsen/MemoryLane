@@ -11,6 +11,16 @@ function pagesCol(albumId: string) {
   return albumsCol().doc(albumId).collection("pages");
 }
 
+/** Top-level nfcSlug -> {albumId, pageId} lookup, kept in sync with the
+ *  pages subcollection. A guest scanning a tag only has the slug, and pages
+ *  live under albums/{albumId}/pages — a collection-group query on nfcSlug
+ *  would need a manually-created Firestore index (same class of setup step
+ *  we avoided for listAlbumsForUser), so this small side table trades a
+ *  little write-time bookkeeping for a plain doc-id lookup instead. */
+function slugsCol() {
+  return getAdminDb().collection("slugs");
+}
+
 export async function listAlbumsForUser(uid: string): Promise<Album[]> {
   // where(ownerUid) + orderBy(createdAt) together need a Firestore composite
   // index — sorting in memory instead avoids that setup step entirely, and
@@ -47,6 +57,15 @@ export async function getOwnedAlbum(
   return album;
 }
 
+/** No ownership check — for guest-facing routes (`/guest/[albumId]/summary`)
+ *  where the viewer is never the owner. Real access control for what a guest
+ *  can actually see lives in the per-page Drive folder check (Feature 6),
+ *  not here — an album's title/page list isn't sensitive on its own. */
+export async function getAlbum(albumId: string): Promise<Album | null> {
+  const doc = await albumsCol().doc(albumId).get();
+  return doc.exists ? (doc.data() as Album) : null;
+}
+
 export async function listPages(albumId: string): Promise<Page[]> {
   const snap = await pagesCol(albumId).get();
   const byId = new Map(snap.docs.map((d) => [d.id, d.data() as Page]));
@@ -62,19 +81,24 @@ export async function addPage(albumId: string, header: string): Promise<Page> {
     nfcSlug: generateSlug(header),
     header,
     bodyText: "",
-    locationName: "",
+    place: "",
+    country: "",
     lat: null,
     lng: null,
-    driveFolderId: "",
+    driveFolderIds: [],
     imageFilter: "all",
     tagKeyword: "",
+    randomizeAll: false,
+    randomLimit: 20,
     displayMode: "grid",
+    slideshowIntervalSec: 4,
     createdAt: now,
     updatedAt: now,
   };
 
   const batch = getAdminDb().batch();
   batch.set(ref, page);
+  batch.set(slugsCol().doc(page.nfcSlug), { albumId, pageId: ref.id });
   batch.update(albumsCol().doc(albumId), {
     pageOrder: FieldValue.arrayUnion(ref.id),
   });
@@ -83,9 +107,65 @@ export async function addPage(albumId: string, header: string): Promise<Page> {
   return page;
 }
 
+export async function getPage(albumId: string, pageId: string): Promise<Page | null> {
+  const doc = await pagesCol(albumId).doc(pageId).get();
+  return doc.exists ? (doc.data() as Page) : null;
+}
+
+export async function updatePage(
+  albumId: string,
+  pageId: string,
+  fields: Partial<
+    Pick<
+      Page,
+      | "header"
+      | "bodyText"
+      | "place"
+      | "country"
+      | "lat"
+      | "lng"
+      | "driveFolderIds"
+      | "imageFilter"
+      | "tagKeyword"
+      | "randomizeAll"
+      | "randomLimit"
+      | "displayMode"
+      | "slideshowIntervalSec"
+    >
+  >
+): Promise<void> {
+  await pagesCol(albumId)
+    .doc(pageId)
+    .update({ ...fields, updatedAt: new Date().toISOString() });
+}
+
+/** O(1) lookup for `/p/[nfcSlug]` — see slugsCol() above for why this isn't
+ *  a collection-group query. */
+export async function getPageBySlug(
+  nfcSlug: string
+): Promise<{ page: Page; album: Album } | null> {
+  const slugDoc = await slugsCol().doc(nfcSlug).get();
+  if (!slugDoc.exists) return null;
+
+  const { albumId, pageId } = slugDoc.data() as { albumId: string; pageId: string };
+  const [pageDoc, albumDoc] = await Promise.all([
+    pagesCol(albumId).doc(pageId).get(),
+    albumsCol().doc(albumId).get(),
+  ]);
+  if (!pageDoc.exists || !albumDoc.exists) return null;
+
+  return { page: pageDoc.data() as Page, album: albumDoc.data() as Album };
+}
+
 export async function deletePage(albumId: string, pageId: string): Promise<void> {
+  const pageRef = pagesCol(albumId).doc(pageId);
+  const pageDoc = await pageRef.get();
+
   const batch = getAdminDb().batch();
-  batch.delete(pagesCol(albumId).doc(pageId));
+  batch.delete(pageRef);
+  if (pageDoc.exists) {
+    batch.delete(slugsCol().doc((pageDoc.data() as Page).nfcSlug));
+  }
   batch.update(albumsCol().doc(albumId), {
     pageOrder: FieldValue.arrayRemove(pageId),
   });
@@ -109,7 +189,10 @@ export async function renameAlbum(albumId: string, title: string): Promise<void>
 export async function deleteAlbum(albumId: string): Promise<void> {
   const pagesSnap = await pagesCol(albumId).get();
   const batch = getAdminDb().batch();
-  pagesSnap.docs.forEach((doc) => batch.delete(doc.ref));
+  pagesSnap.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+    batch.delete(slugsCol().doc((doc.data() as Page).nfcSlug));
+  });
   batch.delete(albumsCol().doc(albumId));
   await batch.commit();
 }
