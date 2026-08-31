@@ -6,6 +6,7 @@ import {
   listPages,
   renameAlbum,
   reorderPages,
+  setAlbumIntroText,
 } from "@/lib/albums";
 
 type RouteContext = { params: Promise<{ albumId: string }> };
@@ -35,9 +36,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   }
 
   const body = await req.json().catch(() => null);
-  if (!body || (body.pageOrder === undefined && body.title === undefined)) {
+  if (
+    !body ||
+    (body.pageOrder === undefined && body.title === undefined && body.introText === undefined)
+  ) {
     return NextResponse.json(
-      { error: "Provide pageOrder (array) and/or title (string)" },
+      { error: "Provide pageOrder (array), title (string), and/or introText (string)" },
       { status: 400 }
     );
   }
@@ -55,6 +59,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "title must be a non-empty string" }, { status: 400 });
     }
     await renameAlbum(albumId, title);
+  }
+
+  if (body.introText !== undefined) {
+    if (typeof body.introText !== "string") {
+      return NextResponse.json({ error: "introText must be a string" }, { status: 400 });
+    }
+    // Empty is allowed on purpose — it means "fall back to the default text",
+    // not a validation failure, unlike title above.
+    await setAlbumIntroText(albumId, body.introText.trim());
   }
 
   return NextResponse.json({ ok: true });

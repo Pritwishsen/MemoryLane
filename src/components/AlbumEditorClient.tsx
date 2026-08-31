@@ -32,6 +32,7 @@ export default function AlbumEditorClient({
   const router = useRouter();
   const [title, setTitle] = useState(album.title);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [introText, setIntroText] = useState(album.introText ?? "");
   const [pages, setPages] = useState(initialPages);
   const [addingPage, setAddingPage] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -58,6 +59,15 @@ export default function AlbumEditorClient({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: trimmed }),
+    });
+  }
+
+  async function handleIntroSave() {
+    if (introText === (album.introText ?? "")) return;
+    await fetch(`/api/albums/${album.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ introText }),
     });
   }
 
@@ -139,6 +149,20 @@ export default function AlbumEditorClient({
             {pages.length} {pages.length === 1 ? "page" : "pages"}
           </p>
         </div>
+
+        <label className="mt-4 block">
+          <span className="font-meta-label text-ink-soft text-xs">
+            Guest intro message
+          </span>
+          <textarea
+            value={introText}
+            onChange={(e) => setIntroText(e.target.value)}
+            onBlur={handleIntroSave}
+            rows={2}
+            placeholder="Here's everywhere we went — tap a souvenir to relive it"
+            className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
+          />
+        </label>
 
         <button
           type="button"

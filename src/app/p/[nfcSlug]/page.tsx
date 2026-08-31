@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { authOptions } from "@/lib/authOptions";
 import { getPageBySlug } from "@/lib/albums";
 import { getUserById } from "@/lib/users";
@@ -103,9 +104,18 @@ export default async function TagPage({ params }: PageProps) {
   return (
     <main className="flex-1 px-5 py-8 sm:px-8">
       <div className="mx-auto w-full max-w-[480px]">
-        <div className="flex items-start justify-between">
-          <Postmark label={page.place || page.country || undefined} size="lg" />
+        <div className="flex items-center justify-between">
+          <Link
+            href={`/guest/${album.id}/summary`}
+            className="font-meta-label text-ink-soft hover:text-ink"
+          >
+            ← Summary
+          </Link>
           <AccountBadge name={session.user?.name ?? null} image={session.user?.image ?? null} />
+        </div>
+
+        <div className="mt-5">
+          <Postmark label={page.place || page.country || undefined} size="lg" />
         </div>
 
         <h1 className="font-display text-ink mt-5 text-3xl font-semibold">

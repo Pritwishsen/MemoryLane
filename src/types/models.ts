@@ -2,6 +2,10 @@ export type Album = {
   id: string;
   ownerUid: string;
   title: string;
+  /** Shown on the guest summary page above the map — spec Feature 8's
+   *  host-settable intro ("Here's everywhere we went..."). Empty string
+   *  means "use the default text," not "show nothing." */
+  introText: string;
   createdAt: string;
   /** Page IDs, in display order. Called `pages: []` in the spec — renamed
    *  here to avoid colliding with the `pages` subcollection name. */

@@ -23,7 +23,10 @@ export async function createInvite(
   const invite: Invite = {
     id,
     albumId,
-    guestEmail,
+    // Lowercased so a guest's later sign-in email (Google normalizes these)
+    // reliably matches what the host typed into the invite form — see
+    // listInvitesForGuest, which is the whole reason this needs to line up.
+    guestEmail: guestEmail.toLowerCase(),
     note,
     invitedAt: new Date().toISOString(),
     status: "sent",
@@ -39,4 +42,12 @@ export async function markInviteOpened(inviteId: string): Promise<void> {
   // Never regress "opened" back to "sent" — this only ever moves forward.
   if ((doc.data() as Invite).status === "opened") return;
   await ref.update({ status: "opened" });
+}
+
+/** Lets a signed-in guest discover which albums they've been invited to,
+ *  without needing to still have the original email/link — a plain
+ *  single-field equality query, no composite index needed. */
+export async function listInvitesForGuest(email: string): Promise<Invite[]> {
+  const snap = await invitesCol().where("guestEmail", "==", email.toLowerCase()).get();
+  return snap.docs.map((d) => d.data() as Invite);
 }

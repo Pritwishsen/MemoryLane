@@ -55,7 +55,7 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
           <div>
             <h1 className="font-display text-ink text-2xl font-semibold">{album.title}</h1>
             <p className="text-ink-soft mt-1 text-sm">
-              Here&rsquo;s everywhere we went — tap a souvenir to relive it
+              {album.introText || "Here’s everywhere we went — tap a souvenir to relive it"}
             </p>
           </div>
           <AccountBadge name={session.user?.name ?? null} image={session.user?.image ?? null} />

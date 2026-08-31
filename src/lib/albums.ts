@@ -36,6 +36,7 @@ export async function createAlbum(uid: string, title: string): Promise<Album> {
     id: ref.id,
     ownerUid: uid,
     title,
+    introText: "",
     createdAt: new Date().toISOString(),
     pageOrder: [],
   };
@@ -181,6 +182,10 @@ export async function reorderPages(
 
 export async function renameAlbum(albumId: string, title: string): Promise<void> {
   await albumsCol().doc(albumId).update({ title });
+}
+
+export async function setAlbumIntroText(albumId: string, introText: string): Promise<void> {
+  await albumsCol().doc(albumId).update({ introText });
 }
 
 /** Firestore doesn't cascade-delete subcollections — the pages under an
