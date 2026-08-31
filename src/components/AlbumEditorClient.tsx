@@ -17,6 +17,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import SortablePageRow from "./SortablePageRow";
+import InviteModal from "./InviteModal";
 import type { Album, Page } from "@/types/models";
 
 type AlbumEditorClientProps = {
@@ -36,6 +37,7 @@ export default function AlbumEditorClient({
   const [toast, setToast] = useState<string | null>(null);
   const [confirmingDeleteAlbum, setConfirmingDeleteAlbum] = useState(false);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
+  const [inviting, setInviting] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -140,9 +142,8 @@ export default function AlbumEditorClient({
 
         <button
           type="button"
-          disabled
-          title="Coming soon"
-          className="border-brass text-brass mt-4 rounded-full border px-5 py-2 text-sm font-medium opacity-50"
+          onClick={() => setInviting(true)}
+          className="border-brass text-brass mt-4 rounded-full border px-5 py-2 text-sm font-medium"
         >
           Invite guests
         </button>
@@ -227,6 +228,15 @@ export default function AlbumEditorClient({
           )}
         </div>
       </div>
+
+      {inviting && (
+        <InviteModal
+          albumId={album.id}
+          albumTitle={title}
+          onClose={() => setInviting(false)}
+          onSent={setToast}
+        />
+      )}
 
       {toast && (
         <div className="bg-ink font-meta-label fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-xs text-white shadow-lg">

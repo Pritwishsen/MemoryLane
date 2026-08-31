@@ -44,3 +44,16 @@ export type Page = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type Invite = {
+  id: string;
+  albumId: string;
+  guestEmail: string;
+  note: string;
+  invitedAt: string;
+  /** "opened" is set when the guest actually visits the linked summary page
+   *  (via an `invite` id in that URL) — informational only for the host,
+   *  never an access gate (Feature 6's Drive-sharing check is the only
+   *  real gate). */
+  status: "sent" | "opened";
+};

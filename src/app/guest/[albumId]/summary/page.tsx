@@ -3,23 +3,35 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { authOptions } from "@/lib/authOptions";
 import { getAlbum, listPages } from "@/lib/albums";
+import { markInviteOpened } from "@/lib/invites";
 import SignInScreen from "@/components/SignInScreen";
 import MapLoader from "@/components/MapLoader";
 import AccountBadge from "@/components/AccountBadge";
 import type { Page } from "@/types/models";
 
-type PageProps = { params: Promise<{ albumId: string }> };
+type PageProps = {
+  params: Promise<{ albumId: string }>;
+  searchParams: Promise<{ invite?: string }>;
+};
 
-export default async function GuestSummaryPage({ params }: PageProps) {
+export default async function GuestSummaryPage({ params, searchParams }: PageProps) {
   const { albumId } = await params;
+  const { invite: inviteId } = await searchParams;
   const session = await getServerSession(authOptions);
 
   if (!session) {
-    return <SignInScreen variant="guest" callbackUrl={`/guest/${albumId}/summary`} />;
+    const callbackUrl = inviteId
+      ? `/guest/${albumId}/summary?invite=${inviteId}`
+      : `/guest/${albumId}/summary`;
+    return <SignInScreen variant="guest" callbackUrl={callbackUrl} />;
   }
 
   const album = await getAlbum(albumId);
   if (!album) notFound();
+
+  if (inviteId) {
+    await markInviteOpened(inviteId);
+  }
 
   const pages = await listPages(albumId);
   const ordered = album.pageOrder
