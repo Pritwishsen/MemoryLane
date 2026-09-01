@@ -49,6 +49,7 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
       lat: p.lat as number,
       lng: p.lng as number,
       label: p.place || p.header,
+      country: p.country,
       slug: p.nfcSlug,
     }));
 
