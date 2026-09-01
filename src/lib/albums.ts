@@ -79,7 +79,12 @@ export async function addPage(albumId: string, header: string): Promise<Page> {
   const page: Page = {
     id: ref.id,
     albumId,
-    nfcSlug: generateSlug(header),
+    // No slug yet — every new page starts life titled "Untitled", and a
+    // slug generated from that would always read "untitled-xxxxx" even
+    // after the host renames it. Left empty until the host's first real
+    // Save (see assignSlugIfMissing), so it's generated from an actual
+    // header instead. The NFC link UI only appears once this is set.
+    nfcSlug: "",
     header,
     bodyText: "",
     place: "",
@@ -99,13 +104,32 @@ export async function addPage(albumId: string, header: string): Promise<Page> {
 
   const batch = getAdminDb().batch();
   batch.set(ref, page);
-  batch.set(slugsCol().doc(page.nfcSlug), { albumId, pageId: ref.id });
   batch.update(albumsCol().doc(albumId), {
     pageOrder: FieldValue.arrayUnion(ref.id),
   });
   await batch.commit();
 
   return page;
+}
+
+/** Generates and assigns a slug the first time a page is really saved (see
+ *  addPage's comment for why creation time itself is too early) — a no-op
+ *  once the page already has one, since a slug must never change after a
+ *  physical NFC tag could have been written with it. */
+export async function assignSlugIfMissing(
+  albumId: string,
+  pageId: string,
+  existingSlug: string,
+  header: string
+): Promise<string> {
+  if (existingSlug) return existingSlug;
+
+  const nfcSlug = generateSlug(header);
+  const batch = getAdminDb().batch();
+  batch.update(pagesCol(albumId).doc(pageId), { nfcSlug });
+  batch.set(slugsCol().doc(nfcSlug), { albumId, pageId });
+  await batch.commit();
+  return nfcSlug;
 }
 
 export async function getPage(albumId: string, pageId: string): Promise<Page | null> {
@@ -165,7 +189,10 @@ export async function deletePage(albumId: string, pageId: string): Promise<void>
   const batch = getAdminDb().batch();
   batch.delete(pageRef);
   if (pageDoc.exists) {
-    batch.delete(slugsCol().doc((pageDoc.data() as Page).nfcSlug));
+    // Empty until the first Save (see addPage) — Firestore rejects an
+    // empty-string doc id outright, so this must stay guarded.
+    const { nfcSlug } = pageDoc.data() as Page;
+    if (nfcSlug) batch.delete(slugsCol().doc(nfcSlug));
   }
   batch.update(albumsCol().doc(albumId), {
     pageOrder: FieldValue.arrayRemove(pageId),
@@ -196,7 +223,8 @@ export async function deleteAlbum(albumId: string): Promise<void> {
   const batch = getAdminDb().batch();
   pagesSnap.docs.forEach((doc) => {
     batch.delete(doc.ref);
-    batch.delete(slugsCol().doc((doc.data() as Page).nfcSlug));
+    const { nfcSlug } = doc.data() as Page;
+    if (nfcSlug) batch.delete(slugsCol().doc(nfcSlug));
   });
   batch.delete(albumsCol().doc(albumId));
   await batch.commit();

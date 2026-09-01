@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import Postmark from "./Postmark";
 import type { Page } from "@/types/models";
 
 type SortablePageRowProps = {
@@ -96,18 +97,24 @@ export default function SortablePageRow({
             </div>
           )}
           <div className="font-meta-label text-ink-soft mt-1 flex items-center gap-2 text-[0.6rem]">
-            <span className="truncate">tag: {page.nfcSlug}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCopyLink();
-              }}
-              title="Copy NFC link"
-              className="text-teal shrink-0 normal-case"
-            >
-              📋
-            </button>
+            {page.nfcSlug ? (
+              <>
+                <span className="truncate">tag: {page.nfcSlug}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCopyLink();
+                  }}
+                  title="Copy NFC link"
+                  className="shrink-0 normal-case"
+                >
+                  <Postmark size="xs" rotate={-4} />
+                </button>
+              </>
+            ) : (
+              <span className="truncate normal-case">not tagged yet — open to save</span>
+            )}
           </div>
         </div>
 

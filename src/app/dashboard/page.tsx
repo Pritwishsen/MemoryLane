@@ -15,6 +15,7 @@ export default async function DashboardPage() {
       albums={albums}
       userName={session.user?.name ?? null}
       userImage={session.user?.image ?? null}
+      userEmail={session.user?.email ?? null}
     />
   );
 }

@@ -24,6 +24,7 @@ export default async function GuestPage() {
             <AccountBadge
               name={session.user?.name ?? null}
               image={session.user?.image ?? null}
+              email={session.user?.email ?? null}
             />
           </div>
           <h1 className="font-display text-ink mt-4 text-2xl font-semibold">
@@ -49,6 +50,7 @@ export default async function GuestPage() {
           <AccountBadge
             name={session.user?.name ?? null}
             image={session.user?.image ?? null}
+            email={session.user?.email ?? null}
           />
         </div>
         <p className="text-ink-soft mt-1 text-sm">

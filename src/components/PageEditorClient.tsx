@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AccountBadge from "./AccountBadge";
 import type { DisplayMode, ImageFilter, Page } from "@/types/models";
 
 type PageEditorClientProps = {
@@ -11,6 +12,9 @@ type PageEditorClientProps = {
    *  than window.location client-side, so the NFC link's host renders
    *  identically on the server and on hydration — no mismatch. */
   host: string;
+  userName: string | null;
+  userImage: string | null;
+  userEmail: string | null;
 };
 
 type DriveCheckState =
@@ -19,7 +23,14 @@ type DriveCheckState =
   | { status: "ok"; name: string }
   | { status: "error"; message: string };
 
-export default function PageEditorClient({ albumId, page, host }: PageEditorClientProps) {
+export default function PageEditorClient({
+  albumId,
+  page,
+  host,
+  userName,
+  userImage,
+  userEmail,
+}: PageEditorClientProps) {
   const [header, setHeader] = useState(page.header);
   const [bodyText, setBodyText] = useState(page.bodyText);
   const [place, setPlace] = useState(page.place ?? "");
@@ -150,12 +161,15 @@ export default function PageEditorClient({ albumId, page, host }: PageEditorClie
   return (
     <main className="flex-1 px-5 py-6 sm:px-8">
       <div className="mx-auto w-full max-w-[720px]">
-        <Link
-          href={`/dashboard/${albumId}`}
-          className="font-meta-label text-ink-soft hover:text-ink"
-        >
-          ← Back to album
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            href={`/dashboard/${albumId}`}
+            className="font-meta-label text-ink-soft hover:text-ink"
+          >
+            ← Back to album
+          </Link>
+          <AccountBadge name={userName} image={userImage} email={userEmail} />
+        </div>
 
         <div className="mt-6 flex flex-col gap-6">
           <label className="block">
@@ -345,19 +359,25 @@ export default function PageEditorClient({ albumId, page, host }: PageEditorClie
             {saving ? "Saving…" : "Save page"}
           </button>
 
-          <div className="border-ink/10 rounded-card border-t pt-5">
-            <span className="font-meta-label text-ink-soft text-xs">NFC link</span>
-            <p className="font-meta-label text-ink mt-1.5 truncate text-sm">
-              {host}/p/{nfcSlug}
+          {nfcSlug ? (
+            <div className="border-ink/10 rounded-card border-t pt-5">
+              <span className="font-meta-label text-ink-soft text-xs">NFC link</span>
+              <p className="font-meta-label text-ink mt-1.5 truncate text-sm">
+                {host}/p/{nfcSlug}
+              </p>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="border-teal text-teal mt-3 rounded-full border px-4 py-1.5 text-sm font-medium"
+              >
+                Copy link
+              </button>
+            </div>
+          ) : (
+            <p className="text-ink-soft border-ink/10 border-t pt-5 text-xs">
+              Save this page to generate its NFC link.
             </p>
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="border-teal text-teal mt-3 rounded-full border px-4 py-1.5 text-sm font-medium"
-            >
-              Copy link
-            </button>
-          </div>
+          )}
         </div>
       </div>
 

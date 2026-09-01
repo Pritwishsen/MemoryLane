@@ -24,5 +24,14 @@ export default async function PageEditorPage({ params }: PageProps) {
   // server and on hydration — no client-only branch, no mismatch.
   const host = (await headers()).get("host") ?? "";
 
-  return <PageEditorClient albumId={albumId} page={page} host={host} />;
+  return (
+    <PageEditorClient
+      albumId={albumId}
+      page={page}
+      host={host}
+      userName={session.user?.name ?? null}
+      userImage={session.user?.image ?? null}
+      userEmail={session.user?.email ?? null}
+    />
+  );
 }

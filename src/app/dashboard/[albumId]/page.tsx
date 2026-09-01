@@ -24,5 +24,13 @@ export default async function AlbumEditorPage({ params }: PageProps) {
     ...pages.filter((p) => !album.pageOrder.includes(p.id)),
   ];
 
-  return <AlbumEditorClient album={album} initialPages={ordered} />;
+  return (
+    <AlbumEditorClient
+      album={album}
+      initialPages={ordered}
+      userName={session.user?.name ?? null}
+      userImage={session.user?.image ?? null}
+      userEmail={session.user?.email ?? null}
+    />
+  );
 }

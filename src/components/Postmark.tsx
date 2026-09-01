@@ -1,13 +1,16 @@
 type PostmarkProps = {
   /** Location name or short label shown inside the stamp. Omit for a purely decorative icon. */
   label?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   /** Tilt angle in degrees — the signature "postmark" look. */
   rotate?: number;
   className?: string;
 };
 
 const SIZE_CLASSES: Record<NonNullable<PostmarkProps["size"]>, string> = {
+  // Inline icon size — e.g. the copy-NFC-link icon next to a page's slug,
+  // where a full "sm" badge would be oversized next to meta-scale text.
+  xs: "h-4 w-4 border text-[0.3rem]",
   sm: "h-9 w-9 border text-[0.5rem]",
   md: "h-16 w-16 border-2 text-[0.6rem]",
   lg: "h-24 w-24 border-2 text-xs",

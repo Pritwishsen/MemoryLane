@@ -18,16 +18,23 @@ import {
 } from "@dnd-kit/sortable";
 import SortablePageRow from "./SortablePageRow";
 import InviteModal from "./InviteModal";
+import AccountBadge from "./AccountBadge";
 import type { Album, Page } from "@/types/models";
 
 type AlbumEditorClientProps = {
   album: Album;
   initialPages: Page[];
+  userName: string | null;
+  userImage: string | null;
+  userEmail: string | null;
 };
 
 export default function AlbumEditorClient({
   album,
   initialPages,
+  userName,
+  userImage,
+  userEmail,
 }: AlbumEditorClientProps) {
   const router = useRouter();
   const [title, setTitle] = useState(album.title);
@@ -122,9 +129,12 @@ export default function AlbumEditorClient({
   return (
     <main className="flex-1 px-5 py-6 sm:px-8">
       <div className="mx-auto w-full max-w-[720px]">
-        <Link href="/dashboard" className="font-meta-label text-ink-soft hover:text-ink">
-          ← Albums
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard" className="font-meta-label text-ink-soft hover:text-ink">
+            ← Albums
+          </Link>
+          <AccountBadge name={userName} image={userImage} email={userEmail} />
+        </div>
 
         <div className="mt-4">
           {editingTitle ? (

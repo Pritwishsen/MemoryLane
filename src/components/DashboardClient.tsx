@@ -9,12 +9,14 @@ type DashboardClientProps = {
   albums: Album[];
   userName: string | null;
   userImage: string | null;
+  userEmail: string | null;
 };
 
 export default function DashboardClient({
   albums,
   userName,
   userImage,
+  userEmail,
 }: DashboardClientProps) {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
@@ -53,7 +55,7 @@ export default function DashboardClient({
           <span className="font-display text-ink text-lg font-bold">
             MemoryLane
           </span>
-          <AccountBadge name={userName} image={userImage} />
+          <AccountBadge name={userName} image={userImage} email={userEmail} />
         </div>
 
         <div className="mt-10 flex items-center justify-between">

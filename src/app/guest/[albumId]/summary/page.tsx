@@ -36,7 +36,11 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
   const pages = await listPages(albumId);
   const ordered = album.pageOrder
     .map((id) => pages.find((p) => p.id === id))
-    .filter((p): p is Page => Boolean(p));
+    .filter((p): p is Page => Boolean(p))
+    // A page with no slug yet has never been saved by the host — it's an
+    // empty "Untitled" placeholder with nothing to show a guest, and
+    // /p/{slug} would be a broken link without one.
+    .filter((p) => p.nfcSlug);
 
   const pinned = ordered
     .filter((p) => p.lat !== null && p.lng !== null)
@@ -58,7 +62,11 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
               {album.introText || "Here’s everywhere we went — tap a souvenir to relive it"}
             </p>
           </div>
-          <AccountBadge name={session.user?.name ?? null} image={session.user?.image ?? null} />
+          <AccountBadge
+            name={session.user?.name ?? null}
+            image={session.user?.image ?? null}
+            email={session.user?.email ?? null}
+          />
         </div>
 
         {pinned.length > 0 && (

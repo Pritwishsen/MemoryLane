@@ -111,7 +111,11 @@ export default async function TagPage({ params }: PageProps) {
           >
             ← Summary
           </Link>
-          <AccountBadge name={session.user?.name ?? null} image={session.user?.image ?? null} />
+          <AccountBadge
+            name={session.user?.name ?? null}
+            image={session.user?.image ?? null}
+            email={session.user?.email ?? null}
+          />
         </div>
 
         <div className="mt-5">

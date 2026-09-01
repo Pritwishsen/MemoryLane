@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
-import { deletePage, getOwnedAlbum, getPage, updatePage } from "@/lib/albums";
+import { assignSlugIfMissing, deletePage, getOwnedAlbum, getPage, updatePage } from "@/lib/albums";
 import { parseDriveFolderId } from "@/lib/drive";
 import { geocodeLocation } from "@/lib/geocode";
 import type { ImageFilter, DisplayMode, Page } from "@/types/models";
@@ -116,6 +116,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   }
 
   await updatePage(albumId, pageId, fields);
+  // The slug is generated from whatever header is in effect after this
+  // save — either just-updated or the existing one — the first time this
+  // page is ever really saved. A no-op once it already has one.
+  await assignSlugIfMissing(albumId, pageId, existing.nfcSlug, fields.header ?? existing.header);
   const updated = await getPage(albumId, pageId);
   return NextResponse.json({ page: updated });
 }
