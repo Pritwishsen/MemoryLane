@@ -33,6 +33,33 @@ const COUNTRY_ZOOM_THRESHOLD = 6;
  *  config to resolve correctly; a divIcon sidesteps that entirely and keeps
  *  the map on-brand (see Postmark.tsx for the same visual motif). */
 function postmarkIcon(label: string): L.DivIcon {
+  // Wrapping a place name across lines in a 40px circle reads badly — at
+  // this scale it easily orphans a single letter onto its own line. A real
+  // postmark shows the town name on one line, so this shrinks the label to
+  // fit on one line instead, truncating with an ellipsis only if it still
+  // doesn't fit even at the smallest readable size. Space Mono is
+  // monospace, so width is predictable from character count without
+  // needing to measure text in a canvas.
+  const CHAR_WIDTH_RATIO = 0.62;
+  // 40px circle, minus the 2px border on each side and 5px of left/right
+  // padding on each side so the shrink-to-fit text keeps a clear gap from
+  // the border instead of sizing itself right up to the edge.
+  const USABLE_WIDTH = 26;
+  const MIN_FONT_SIZE = 3.5;
+  const MAX_FONT_SIZE = 7;
+
+  const upper = label.toUpperCase();
+  const fontSize = Math.max(
+    MIN_FONT_SIZE,
+    Math.min(MAX_FONT_SIZE, USABLE_WIDTH / (upper.length * CHAR_WIDTH_RATIO)),
+  );
+
+  let text = upper;
+  const maxChars = Math.floor(USABLE_WIDTH / (fontSize * CHAR_WIDTH_RATIO));
+  if (fontSize === MIN_FONT_SIZE && upper.length > maxChars) {
+    text = `${upper.slice(0, Math.max(1, maxChars - 1))}…`;
+  }
+
   return L.divIcon({
     className: "",
     html: `<div style="
@@ -40,11 +67,11 @@ function postmarkIcon(label: string): L.DivIcon {
       width:40px;height:40px;border-radius:9999px;
       border:2px solid var(--color-teal);background:var(--color-paper);
       color:var(--color-teal);font-family:var(--font-meta);
-      font-size:7px;text-align:center;line-height:1.1;padding:2px;
-      text-transform:uppercase;letter-spacing:0.03em;
+      text-align:center;padding:3px 5px;box-sizing:border-box;
+      white-space:nowrap;overflow:hidden;
       transform:rotate(-6deg);box-shadow:0 1px 3px rgba(0,0,0,0.25);
       cursor:pointer;
-    ">${label}</div>`,
+    "><span style="font-size:${fontSize}px;line-height:1;">${text}</span></div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
   });
