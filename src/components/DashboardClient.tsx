@@ -65,9 +65,9 @@ export default function DashboardClient({
           <button
             type="button"
             onClick={() => setIsCreating((v) => !v)}
-            className="font-meta-label text-teal"
+            className="text-teal text-sm font-medium"
           >
-            {isCreating ? "cancel" : "+ new"}
+            {isCreating ? "Cancel" : "+ New"}
           </button>
         </div>
         <hr className="border-ink/10 mt-3" />

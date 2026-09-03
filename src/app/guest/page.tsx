@@ -1,11 +1,12 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { authOptions } from "@/lib/authOptions";
-import { getAlbum } from "@/lib/albums";
+import { getAlbum, listPages } from "@/lib/albums";
 import { listInvitesForGuest } from "@/lib/invites";
 import SignInScreen from "@/components/SignInScreen";
 import AccountBadge from "@/components/AccountBadge";
-import type { Album } from "@/types/models";
+import MapLoader from "@/components/MapLoader";
+import type { Album, Page } from "@/types/models";
 
 export default async function GuestPage() {
   const session = await getServerSession(authOptions);
@@ -15,6 +16,7 @@ export default async function GuestPage() {
   }
 
   const invitedAlbums = await getInvitedAlbums(session.user?.email ?? null);
+  const pins = await getAggregatedPins(invitedAlbums);
 
   if (invitedAlbums.length === 0) {
     return (
@@ -57,6 +59,12 @@ export default async function GuestPage() {
           Albums you&rsquo;ve been invited to
         </p>
 
+        {pins.length > 0 && (
+          <div className="mt-6">
+            <MapLoader pins={pins} />
+          </div>
+        )}
+
         <ul className="mt-6 flex flex-col gap-3">
           {invitedAlbums.map((album) => (
             <li key={album.id}>
@@ -94,4 +102,28 @@ async function getInvitedAlbums(email: string | null): Promise<Album[]> {
 
   const albums = await Promise.all(albumIds.map((id) => getAlbum(id)));
   return albums.filter((a): a is Album => a !== null);
+}
+
+/** One combined pin set across every album the guest has access to — same
+ *  shape a single album's summary map uses, just pooled from all of them.
+ *  Each pin still routes to /p/{slug} on click, which re-checks that
+ *  specific page's Drive access on its own, so pooling pins here doesn't
+ *  change what a guest can actually see, only what the map shows at a
+ *  glance. Firestore page ids are globally unique, so ids can't collide
+ *  across albums. */
+async function getAggregatedPins(albums: Album[]) {
+  const pagesByAlbum = await Promise.all(albums.map((a) => listPages(a.id)));
+
+  return pagesByAlbum
+    .flat()
+    .filter((p): p is Page => p.lat !== null && p.lng !== null && Boolean(p.nfcSlug))
+    .map((p) => ({
+      id: p.id,
+      lat: p.lat as number,
+      lng: p.lng as number,
+      label: p.place || p.header,
+      header: p.header,
+      country: p.country,
+      slug: p.nfcSlug,
+    }));
 }

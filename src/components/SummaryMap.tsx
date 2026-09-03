@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import Link from "next/link";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -16,6 +17,7 @@ export type MapPin = {
   lat: number;
   lng: number;
   label: string;
+  header: string;
   country: string;
   slug: string;
 };
@@ -41,10 +43,10 @@ function postmarkIcon(label: string): L.DivIcon {
   // monospace, so width is predictable from character count without
   // needing to measure text in a canvas.
   const CHAR_WIDTH_RATIO = 0.62;
-  // 40px circle, minus the 2px border on each side and 5px of left/right
-  // padding on each side so the shrink-to-fit text keeps a clear gap from
-  // the border instead of sizing itself right up to the edge.
-  const USABLE_WIDTH = 26;
+  // 40px circle, minus the 2px border on each side and 8px of left/right
+  // padding on each side — the first/last letter otherwise sizes itself
+  // right up to (and visually into) the curved border.
+  const USABLE_WIDTH = 20;
   const MIN_FONT_SIZE = 3.5;
   const MAX_FONT_SIZE = 7;
 
@@ -67,7 +69,7 @@ function postmarkIcon(label: string): L.DivIcon {
       width:40px;height:40px;border-radius:9999px;
       border:2px solid var(--color-teal);background:var(--color-paper);
       color:var(--color-teal);font-family:var(--font-meta);
-      text-align:center;padding:3px 5px;box-sizing:border-box;
+      text-align:center;padding:3px 8px;box-sizing:border-box;
       white-space:nowrap;overflow:hidden;
       transform:rotate(-6deg);box-shadow:0 1px 3px rgba(0,0,0,0.25);
       cursor:pointer;
@@ -155,6 +157,40 @@ function groupByCountry(pins: MapPin[]): CountryGroup[] {
   }));
 }
 
+type PlaceGroup = {
+  key: string;
+  label: string;
+  lat: number;
+  lng: number;
+  pages: { id: string; header: string; slug: string }[];
+};
+
+/** Two pages at the same named place (e.g. a guest invited to two albums
+ *  that both have a "Barcelona" page) would otherwise stack two identical
+ *  pins on top of each other. Collapsing them into one pin — before
+ *  distance-based clustering even runs — means every place name shows up
+ *  on the map exactly once; a click either goes straight to the one page
+ *  there, or opens a picker when there's more than one. */
+function groupByPlace(pins: MapPin[]): PlaceGroup[] {
+  const groups = new Map<string, PlaceGroup>();
+  for (const pin of pins) {
+    const key = pin.label.trim().toLowerCase();
+    const existing = groups.get(key);
+    if (existing) {
+      existing.pages.push({ id: pin.id, header: pin.header, slug: pin.slug });
+    } else {
+      groups.set(key, {
+        key,
+        label: pin.label,
+        lat: pin.lat,
+        lng: pin.lng,
+        pages: [{ id: pin.id, header: pin.header, slug: pin.slug }],
+      });
+    }
+  }
+  return [...groups.values()];
+}
+
 /** Renders inside <MapContainer> — useMap/useMapEvents only work as
  *  descendants of it, which is why this can't just live in SummaryMap
  *  itself. Switches between the country overview and individual/clustered
@@ -205,13 +241,36 @@ function ZoomAwarePins({ pins }: { pins: MapPin[] }) {
       showCoverageOnHover={false}
       iconCreateFunction={(cluster: L.MarkerCluster) => clusterIcon(cluster.getChildCount())}
     >
-      {pins.map((pin) => (
+      {groupByPlace(pins).map((group) => (
         <Marker
-          key={pin.id}
-          position={[pin.lat, pin.lng]}
-          icon={postmarkIcon(pin.label)}
-          eventHandlers={{ click: () => router.push(`/p/${pin.slug}`) }}
-        />
+          key={group.key}
+          position={[group.lat, group.lng]}
+          icon={postmarkIcon(group.label)}
+          eventHandlers={
+            group.pages.length === 1
+              ? { click: () => router.push(`/p/${group.pages[0].slug}`) }
+              : undefined
+          }
+        >
+          {group.pages.length > 1 && (
+            <Popup minWidth={180} maxWidth={240}>
+              <p className="font-meta-label text-ink-soft mb-1 text-xs">{group.label}</p>
+              {/* Rows run ~34px each; capping at 3 before scrolling keeps the
+                  popup from growing arbitrarily tall on a place with many pages. */}
+              <div className="max-h-[102px] overflow-y-auto">
+                {group.pages.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/p/${p.slug}`}
+                    className="text-ink hover:text-teal border-ink/10 block border-b py-1.5 text-sm last:border-b-0"
+                  >
+                    {p.header}
+                  </Link>
+                ))}
+              </div>
+            </Popup>
+          )}
+        </Marker>
       ))}
     </MarkerClusterGroup>
   );

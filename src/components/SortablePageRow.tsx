@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -12,6 +12,11 @@ type SortablePageRowProps = {
   albumId: string;
   onDeleted: (pageId: string) => void;
   onCopied: (message: string) => void;
+  /** True for the page just added by "+ add page" — on a long page list, a
+   *  new row appends off-screen at the bottom with nothing to show for it.
+   *  This scrolls it into view and gives it a brief highlight so it's
+   *  obvious something happened. */
+  isNew?: boolean;
 };
 
 export default function SortablePageRow({
@@ -19,13 +24,21 @@ export default function SortablePageRow({
   albumId,
   onDeleted,
   onCopied,
+  isNew = false,
 }: SortablePageRowProps) {
   const router = useRouter();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const rootRef = useRef<HTMLLIElement | null>(null);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: page.id });
+
+  useEffect(() => {
+    if (isNew) {
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [isNew]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -57,9 +70,14 @@ export default function SortablePageRow({
 
   return (
     <li
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        rootRef.current = node;
+      }}
       style={style}
-      className="border-ink/10 rounded-card overflow-hidden border bg-white"
+      className={`border-ink/10 rounded-card overflow-hidden border bg-white transition-shadow duration-700 ${
+        isNew ? "ring-teal ring-2 ring-offset-2" : ""
+      }`}
     >
       <div className="flex items-center gap-3 px-3 py-3">
         <button

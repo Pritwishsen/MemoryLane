@@ -49,6 +49,7 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
       lat: p.lat as number,
       lng: p.lng as number,
       label: p.place || p.header,
+      header: p.header,
       country: p.country,
       slug: p.nfcSlug,
     }));
@@ -56,18 +57,22 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
   return (
     <main className="flex-1 px-5 py-8 sm:px-8">
       <div className="mx-auto w-full max-w-[480px]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="font-display text-ink text-2xl font-semibold">{album.title}</h1>
-            <p className="text-ink-soft mt-1 text-sm">
-              {album.introText || "Here’s everywhere we went — tap a souvenir to relive it"}
-            </p>
-          </div>
+        <div className="flex items-center justify-between">
+          <Link href="/guest" className="font-meta-label text-ink-soft hover:text-ink">
+            ← Your albums
+          </Link>
           <AccountBadge
             name={session.user?.name ?? null}
             image={session.user?.image ?? null}
             email={session.user?.email ?? null}
           />
+        </div>
+
+        <div className="mt-5">
+          <h1 className="font-display text-ink text-2xl font-semibold">{album.title}</h1>
+          <p className="text-ink-soft mt-1 text-sm">
+            {album.introText || "Here’s everywhere we went — tap a souvenir to relive it"}
+          </p>
         </div>
 
         {pinned.length > 0 && (

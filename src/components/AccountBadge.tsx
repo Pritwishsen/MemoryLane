@@ -63,7 +63,10 @@ export default function AccountBadge({
       </button>
 
       {open && (
-        <div className="border-ink/10 rounded-card absolute right-0 top-11 z-50 w-52 border bg-white py-1.5 shadow-lg">
+        // z-[1100]: on the guest summary page this menu sits right above a
+        // Leaflet map, whose own panes/controls use z-index up to 1000 —
+        // anything lower gets rendered behind the map wherever they overlap.
+        <div className="border-ink/10 rounded-card absolute right-0 top-11 z-[1100] w-52 border bg-white py-1.5 shadow-lg">
           {(name || email) && (
             <div className="border-ink/10 border-b px-3 pb-2">
               {name && <p className="text-ink truncate text-sm font-medium">{name}</p>}

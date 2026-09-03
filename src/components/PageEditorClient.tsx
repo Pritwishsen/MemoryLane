@@ -173,7 +173,7 @@ export default function PageEditorClient({
 
         <div className="mt-6 flex flex-col gap-6">
           <label className="block">
-            <span className="font-meta-label text-ink-soft text-xs">Header</span>
+            <span className="text-ink-soft text-xs font-medium">Header</span>
             <input
               value={header}
               onChange={(e) => setHeader(e.target.value)}
@@ -182,7 +182,7 @@ export default function PageEditorClient({
           </label>
 
           <label className="block">
-            <span className="font-meta-label text-ink-soft text-xs">Story</span>
+            <span className="text-ink-soft text-xs font-medium">Story</span>
             <textarea
               value={bodyText}
               onChange={(e) => setBodyText(e.target.value)}
@@ -193,7 +193,7 @@ export default function PageEditorClient({
 
           <div className="flex gap-4">
             <label className="block flex-1">
-              <span className="font-meta-label text-ink-soft text-xs">Place</span>
+              <span className="text-ink-soft text-xs font-medium">Place</span>
               <input
                 value={place}
                 onChange={(e) => setPlace(e.target.value)}
@@ -202,7 +202,7 @@ export default function PageEditorClient({
               />
             </label>
             <label className="block flex-1">
-              <span className="font-meta-label text-ink-soft text-xs">Country</span>
+              <span className="text-ink-soft text-xs font-medium">Country</span>
               <input
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
@@ -213,7 +213,7 @@ export default function PageEditorClient({
           </div>
 
           <div className="block">
-            <span className="font-meta-label text-ink-soft text-xs">
+            <span className="text-ink-soft text-xs font-medium">
               Google Drive folders
             </span>
             <div className="mt-1.5 flex flex-col gap-3">
@@ -254,7 +254,7 @@ export default function PageEditorClient({
               <button
                 type="button"
                 onClick={addFolderRow}
-                className="font-meta-label text-teal self-start text-xs"
+                className="text-teal self-start text-sm font-medium"
               >
                 + Add another folder
               </button>
@@ -262,7 +262,7 @@ export default function PageEditorClient({
           </div>
 
           <div>
-            <span className="font-meta-label text-ink-soft text-xs">Show images</span>
+            <span className="text-ink-soft text-xs font-medium">Show images</span>
             <div className="mt-2 flex flex-col gap-2">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -312,7 +312,7 @@ export default function PageEditorClient({
           </div>
 
           <div>
-            <span className="font-meta-label text-ink-soft text-xs">Display as</span>
+            <span className="text-ink-soft text-xs font-medium">Display as</span>
             <div className="mt-2 flex items-center gap-5">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -361,7 +361,7 @@ export default function PageEditorClient({
 
           {nfcSlug ? (
             <div className="border-ink/10 rounded-card border-t pt-5">
-              <span className="font-meta-label text-ink-soft text-xs">NFC link</span>
+              <span className="text-ink-soft text-xs font-medium">NFC link</span>
               <p className="font-meta-label text-ink mt-1.5 truncate text-sm">
                 {host}/p/{nfcSlug}
               </p>

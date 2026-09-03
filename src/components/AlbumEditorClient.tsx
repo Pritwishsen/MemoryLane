@@ -42,6 +42,7 @@ export default function AlbumEditorClient({
   const [introText, setIntroText] = useState(album.introText ?? "");
   const [pages, setPages] = useState(initialPages);
   const [addingPage, setAddingPage] = useState(false);
+  const [newPageId, setNewPageId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [confirmingDeleteAlbum, setConfirmingDeleteAlbum] = useState(false);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
@@ -54,6 +55,12 @@ export default function AlbumEditorClient({
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    if (!newPageId) return;
+    const t = setTimeout(() => setNewPageId(null), 2000);
+    return () => clearTimeout(t);
+  }, [newPageId]);
 
   async function handleTitleSave() {
     setEditingTitle(false);
@@ -89,6 +96,8 @@ export default function AlbumEditorClient({
       if (!res.ok) throw new Error("Failed to add page");
       const { page } = await res.json();
       setPages((prev) => [...prev, page]);
+      setNewPageId(page.id);
+      setToast("New page added");
     } finally {
       setAddingPage(false);
     }
@@ -161,7 +170,7 @@ export default function AlbumEditorClient({
         </div>
 
         <label className="mt-4 block">
-          <span className="font-meta-label text-ink-soft text-xs">
+          <span className="text-ink-soft text-xs font-medium">
             Guest intro message
           </span>
           <textarea
@@ -171,6 +180,7 @@ export default function AlbumEditorClient({
             rows={2}
             placeholder="Here's everywhere we went — tap a souvenir to relive it"
             className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
+            suppressHydrationWarning
           />
         </label>
 
@@ -188,9 +198,9 @@ export default function AlbumEditorClient({
             type="button"
             onClick={handleAddPage}
             disabled={addingPage}
-            className="font-meta-label text-teal"
+            className="text-teal text-sm font-medium"
           >
-            {addingPage ? "adding…" : "+ add page"}
+            {addingPage ? "Adding…" : "+ Add page"}
           </button>
         </div>
         <hr className="border-ink/10 mt-3" />
@@ -217,6 +227,7 @@ export default function AlbumEditorClient({
                     albumId={album.id}
                     onDeleted={handlePageDeleted}
                     onCopied={setToast}
+                    isNew={page.id === newPageId}
                   />
                 ))}
               </ul>

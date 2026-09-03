@@ -66,7 +66,7 @@ export default function InviteModal({ albumId, albumTitle, onClose, onSent }: In
         </div>
 
         <label className="mt-5 block">
-          <span className="font-meta-label text-ink-soft text-xs">Guest email</span>
+          <span className="text-ink-soft text-xs font-medium">Guest email</span>
           <input
             autoFocus
             type="email"
@@ -78,7 +78,7 @@ export default function InviteModal({ albumId, albumTitle, onClose, onSent }: In
         </label>
 
         <label className="mt-4 block">
-          <span className="font-meta-label text-ink-soft text-xs">Note (optional)</span>
+          <span className="text-ink-soft text-xs font-medium">Note (optional)</span>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}

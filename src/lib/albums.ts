@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "./firebaseAdmin";
 import { generateSlug } from "./slug";
+import { toTitleCase } from "./text";
 import type { Album, Page } from "@/types/models";
 
 function albumsCol() {
@@ -159,9 +160,16 @@ export async function updatePage(
     >
   >
 ): Promise<void> {
+  // Place names are free text with no picker — hosts type "MADRID",
+  // "llandudno", "St Michael's mount" etc. inconsistently. Normalizing here,
+  // the single write path for a page's place, keeps every page consistent
+  // regardless of which caller sets it.
+  const normalized =
+    fields.place !== undefined ? { ...fields, place: toTitleCase(fields.place) } : fields;
+
   await pagesCol(albumId)
     .doc(pageId)
-    .update({ ...fields, updatedAt: new Date().toISOString() });
+    .update({ ...normalized, updatedAt: new Date().toISOString() });
 }
 
 /** O(1) lookup for `/p/[nfcSlug]` — see slugsCol() above for why this isn't
