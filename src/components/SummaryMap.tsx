@@ -69,33 +69,34 @@ function clusterIcon(count: number): L.DivIcon {
   });
 }
 
-/** The first-glance, country-level pin — flag on top, place count below.
- *  Unicode flag emoji (🇪🇸 etc.) don't render as pictures on Windows —
- *  its default emoji font shows the raw two-letter code instead, a known,
- *  long-standing platform limitation — so this uses real flag image assets
- *  (flag-icons) instead, which look identical on every OS. Falls back to a
- *  globe when the country name doesn't match a known one (free text the
- *  host typed, not a picker). */
-function countryIcon(iso2: string | null, count: number): L.DivIcon {
+/** The first-glance, country-level pin — a flag badge planted on a flagpost,
+ *  like a flag physically stuck into the map at that country. Unicode flag
+ *  emoji (🇪🇸 etc.) don't render as pictures on Windows — its default emoji
+ *  font shows the raw two-letter code instead, a known, long-standing
+ *  platform limitation — so this uses real flag image assets (flag-icons,
+ *  the square `fis` variant so it fills a circle cleanly) instead, which
+ *  look identical on every OS. Falls back to a globe when the country name
+ *  doesn't match a known one (free text the host typed, not a picker). The
+ *  anchor point is the base of the post, not the circle center, so the pin
+ *  points at the actual location like any other map marker. */
+function countryIcon(iso2: string | null): L.DivIcon {
   const flagHtml = iso2
-    ? `<span class="fi fi-${iso2.toLowerCase()}" style="width:26px;height:19px;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,0.15);"></span>`
-    : `<span style="font-size:20px;line-height:1;">🌐</span>`;
+    ? `<span class="fi fi-${iso2.toLowerCase()} fis" style="width:100%;height:100%;background-size:cover;display:block;"></span>`
+    : `<span style="font-size:18px;line-height:1;">🌐</span>`;
 
   return L.divIcon({
     className: "",
-    html: `<div style="
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      width:52px;height:52px;border-radius:9999px;
-      border:2px solid var(--color-teal);background:var(--color-paper);
-      color:var(--color-teal);font-family:var(--font-meta);
-      box-shadow:0 1px 3px rgba(0,0,0,0.25);cursor:pointer;
-      transform:rotate(-6deg);
-    ">
-      ${flagHtml}
-      <span style="font-size:10px;font-weight:700;margin-top:3px;">${count}</span>
+    html: `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+      <div style="
+        display:flex;align-items:center;justify-content:center;overflow:hidden;
+        width:34px;height:34px;border-radius:9999px;
+        border:2px solid var(--color-teal);background:var(--color-paper);
+        box-shadow:0 1px 3px rgba(0,0,0,0.25);
+      ">${flagHtml}</div>
+      <div style="width:2px;height:14px;background:var(--color-teal);"></div>
     </div>`,
-    iconSize: [52, 52],
-    iconAnchor: [26, 26],
+    iconSize: [34, 50],
+    iconAnchor: [17, 50],
   });
 }
 
@@ -148,9 +149,23 @@ function ZoomAwarePins({ pins }: { pins: MapPin[] }) {
           <Marker
             key={group.key}
             position={[group.lat, group.lng]}
-            icon={countryIcon(countryToIso2(group.country), group.count)}
+            icon={countryIcon(countryToIso2(group.country))}
             eventHandlers={{
-              click: () => map.fitBounds(group.bounds, { padding: [32, 32] }),
+              // Plain fitBounds picks whatever zoom fits every pin in the
+              // country, which for a widely-spread country (e.g. Madrid to
+              // Seville) can land below COUNTRY_ZOOM_THRESHOLD — the map
+              // would just recenter and stay showing the country flag
+              // instead of revealing place pins on the first click. Clamp
+              // the computed zoom into [threshold, 13] so the first click
+              // always crosses into place-tier, and a single-pin country
+              // (zero-area bounds, which would otherwise fit at max zoom)
+              // doesn't land at a near-street-level view either.
+              click: () => {
+                const bounds = L.latLngBounds(group.bounds);
+                const naturalZoom = map.getBoundsZoom(bounds, false, L.point(32, 32));
+                const targetZoom = Math.min(Math.max(naturalZoom, COUNTRY_ZOOM_THRESHOLD), 13);
+                map.setView(bounds.getCenter(), targetZoom);
+              },
             }}
           />
         ))}
