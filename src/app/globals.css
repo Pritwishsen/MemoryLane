@@ -41,3 +41,233 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+/* Country-tier flag pin on the guest summary map (SummaryMap.tsx's
+   countryIcon()) — a Leaflet divIcon built as a plain HTML string, so its
+   interactive states live here as real CSS rather than inline styles.
+   See design_handoff_flag_map_pins/README.md (option 1b) for the full spec. */
+.country-stamp-frame {
+  position: relative;
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 3px;
+  background: var(--color-paper);
+  outline: 1.5px dashed rgba(31, 78, 74, 0.55);
+  outline-offset: -1px;
+  box-shadow: 0 2px 5px rgba(34, 32, 27, 0.28);
+  cursor: pointer;
+  transform: rotate(var(--stamp-tilt, 0deg));
+  transition:
+    transform 140ms ease-out,
+    box-shadow 140ms ease-out,
+    padding 140ms ease-out,
+    outline-color 140ms ease-out,
+    background-color 140ms ease-out;
+}
+/* Scoped under .country-stamp-frame (not a bare .country-stamp-flag rule)
+   so this reliably beats flag-icons' own base `.fi{width:1.333333em}` rule
+   — same specificity as a bare class selector would be, which made this
+   depend on CSS import order and, when flag-icons' own default (much
+   smaller, unitless-em) width lost, left a real flag rendering tiny inside
+   a Leaflet-icon-sized container with visible paper padding around it. */
+.country-stamp-frame .country-stamp-flag {
+  display: block;
+  width: 30px;
+  height: 22px;
+  border-radius: 1px;
+  background-size: cover;
+  transition:
+    width 140ms ease-out,
+    height 140ms ease-out;
+}
+.country-stamp-fallback {
+  background-image: repeating-linear-gradient(135deg, #ded5c0 0 6px, #d4cab3 6px 12px);
+}
+
+.country-stamp-frame:hover,
+.country-stamp-frame:active {
+  background: #ffffff;
+  padding: 4px;
+  outline-color: rgba(31, 78, 74, 0.7);
+  box-shadow: 0 6px 12px rgba(34, 32, 27, 0.3);
+  transform: rotate(-2deg) scale(1.1);
+}
+.country-stamp-frame:hover .country-stamp-flag,
+.country-stamp-frame:active .country-stamp-flag {
+  width: 32px;
+  height: 23px;
+}
+
+.country-stamp-frame.is-selected {
+  padding: 4px;
+  outline: 2px solid var(--color-brass);
+  box-shadow: 0 4px 10px rgba(34, 32, 27, 0.34);
+  transform: rotate(0deg) scale(1.15);
+}
+.country-stamp-frame.is-selected .country-stamp-flag {
+  width: 34px;
+  height: 24px;
+}
+.country-stamp-frame.is-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: rgba(31, 78, 74, 0.28);
+  opacity: 0.55;
+  animation: country-stamp-pulse 2.2s ease-out 1;
+  pointer-events: none;
+}
+@keyframes country-stamp-pulse {
+  from {
+    transform: scale(0.7);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.country-stamp-frame.is-loading {
+  outline-color: rgba(31, 78, 74, 0.35);
+  box-shadow: none;
+}
+
+/* Crowded packet (design option 2b) — a front stamp plus up to two faded,
+   fanned stamps behind it and a "+n" count badge. Absolute-positioned
+   within one relative canvas rather than separate Leaflet markers, since a
+   packet is one marker with one click target. */
+.country-packet {
+  position: relative;
+  width: 60px;
+  height: 46px;
+}
+.country-stamp-frame.is-packet-front,
+.country-stamp-frame.is-packet-behind {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px;
+}
+.country-stamp-flag.is-packet-front,
+.country-stamp-flag.is-packet-behind {
+  width: 28px;
+  height: 20px;
+}
+.country-stamp-frame.is-packet-front {
+  transform: rotate(-5deg);
+  box-shadow: 0 3px 7px rgba(34, 32, 27, 0.3);
+  outline-color: rgba(31, 78, 74, 0.6);
+}
+.country-stamp-frame.is-packet-behind-1 {
+  left: 8px;
+  top: 5px;
+  transform: rotate(4deg);
+  background: #efe8dd;
+  box-shadow: none;
+  outline-color: rgba(31, 78, 74, 0.42);
+}
+.country-stamp-frame.is-packet-behind-1 .country-stamp-flag {
+  opacity: 0.85;
+}
+.country-stamp-frame.is-packet-behind-2 {
+  left: 14px;
+  top: 10px;
+  transform: rotate(9deg);
+  background: #ece5d8;
+  box-shadow: none;
+  outline-color: rgba(31, 78, 74, 0.3);
+}
+.country-stamp-frame.is-packet-behind-2 .country-stamp-flag {
+  opacity: 0.7;
+}
+.country-packet-badge {
+  position: absolute;
+  left: 36px;
+  top: 26px;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: var(--color-teal);
+  color: var(--color-paper);
+  font-family: var(--font-meta);
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(34, 32, 27, 0.3);
+  pointer-events: none;
+}
+
+/* Guest landing album-row flag cluster (guest/page.tsx, GUEST_SCREENS.md
+   option 3a) — 1-2 decorative stamps at list scale, same postmark/stamp
+   language as the map pins above but distinct exact sizing (a smaller,
+   non-interactive variant), so these are separate classes rather than
+   reusing .country-stamp-frame's hover/hover states, which don't apply here. */
+.album-flag-cluster {
+  position: relative;
+  width: 46px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.album-flag-stamp {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  padding: 2.5px;
+  border-radius: 3px;
+  background: var(--color-paper);
+  outline: 1.2px dashed rgba(31, 78, 74, 0.55);
+  outline-offset: -1px;
+  box-shadow: 0 1px 3px rgba(34, 32, 27, 0.2);
+}
+/* Two classes (descendant + class), matching .fi's own specificity plus one
+   — see the .country-stamp-flag comment above for why this can't be a bare
+   `.fi{...}` override: it would depend on unpredictable CSS import order. */
+.album-flag-stamp .fi,
+.album-flag-stamp .country-stamp-fallback {
+  display: block;
+  width: 28px;
+  height: 20px;
+  border-radius: 1px;
+  background-size: cover;
+}
+.album-flag-stamp.is-front {
+  transform: rotate(-6deg);
+  z-index: 1;
+}
+.album-flag-stamp.is-behind {
+  left: 12px;
+  top: 6px;
+  transform: rotate(8deg);
+  background: #ece5d8;
+}
+.album-flag-stamp.is-behind .fi,
+.album-flag-stamp.is-behind .country-stamp-fallback {
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .country-stamp-frame {
+    transition:
+      box-shadow 140ms ease-out,
+      outline-color 140ms ease-out;
+  }
+  .country-stamp-frame:hover,
+  .country-stamp-frame:active {
+    transform: rotate(var(--stamp-tilt, 0deg));
+  }
+  .country-stamp-frame.is-selected {
+    transform: rotate(0deg);
+  }
+  .country-stamp-frame.is-selected::after {
+    animation: none;
+    display: none;
+  }
+}

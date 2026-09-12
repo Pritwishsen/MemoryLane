@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { authOptions } from "@/lib/authOptions";
-import { getPageBySlug } from "@/lib/albums";
+import { getPageBySlug, listPages } from "@/lib/albums";
 import { getUserById } from "@/lib/users";
 import {
   listDriveImages,
@@ -13,10 +13,19 @@ import {
 import SignInScreen from "@/components/SignInScreen";
 import AccountBadge from "@/components/AccountBadge";
 import Postmark from "@/components/Postmark";
+import FittedPostmark from "@/components/FittedPostmark";
 import PhotoGrid, { type DisplayPhoto } from "@/components/PhotoGrid";
 import PhotoSlideshow from "@/components/PhotoSlideshow";
+import type { DisplayMode } from "@/types/models";
 
 type PageProps = { params: Promise<{ nfcSlug: string }> };
+
+/** Part 2 (design_handoff_flag_map_pins v2) will extend DisplayMode with
+ *  contact/stack/scrapbook/gallery and add their entries here. */
+const DISPLAY_MODE_LABEL: Record<DisplayMode, string> = {
+  grid: "GRID",
+  slideshow: "SLIDESHOW",
+};
 
 function shuffle<T>(items: T[]): T[] {
   const result = [...items];
@@ -38,6 +47,16 @@ export default async function TagPage({ params }: PageProps) {
   const result = await getPageBySlug(nfcSlug);
   if (!result) notFound();
   const { page, album } = result;
+
+  // Sticky "next in this album" footer — GUEST_SCREENS.md's one new element
+  // on this screen. getPageBySlug always resolves page+album together (or
+  // null), so there's no real "opened outside an album context" case to
+  // handle here; the only real hide-condition is having no next page.
+  const currentIndex = album.pageOrder.indexOf(page.id);
+  const nextPageId = currentIndex >= 0 ? album.pageOrder[currentIndex + 1] : undefined;
+  const nextPage = nextPageId
+    ? (await listPages(album.id)).find((p) => p.id === nextPageId && p.nfcSlug)
+    : undefined;
 
   const locationLine = [page.place, page.country].filter(Boolean).join(", ");
   const folderIds = page.driveFolderIds ?? [];
@@ -104,8 +123,10 @@ export default async function TagPage({ params }: PageProps) {
 
   const host = accessDenied ? await getUserById(album.ownerUid) : null;
 
+  const showMetaRule = !accessDenied && !photoError;
+
   return (
-    <main className="flex-1 px-5 py-8 sm:px-8">
+    <main className={`flex-1 px-5 py-8 sm:px-8 ${nextPage ? "pb-[90px]" : ""}`}>
       <div className="mx-auto w-full max-w-[480px]">
         <div className="flex items-center justify-between">
           <Link
@@ -121,16 +142,17 @@ export default async function TagPage({ params }: PageProps) {
           />
         </div>
 
-        <div className="mt-5">
+        <div className="mt-5 flex items-start gap-4">
           <Postmark label={page.place || page.country || undefined} size="lg" />
+          <div className="min-w-0 flex-1 pt-1">
+            <h1 className="font-display text-ink text-[26px] font-semibold" style={{ textWrap: "pretty" }}>
+              {page.header}
+            </h1>
+            {locationLine && (
+              <p className="font-meta-label text-teal mt-[7px] text-[9.5px]">{locationLine}</p>
+            )}
+          </div>
         </div>
-
-        <h1 className="font-display text-ink mt-5 text-3xl font-semibold">
-          {page.header}
-        </h1>
-        {locationLine && (
-          <p className="font-meta-label text-teal mt-1 text-xs">{locationLine}</p>
-        )}
 
         {page.bodyText && (
           <p className="text-ink mt-5 text-sm leading-relaxed whitespace-pre-wrap">
@@ -138,7 +160,22 @@ export default async function TagPage({ params }: PageProps) {
           </p>
         )}
 
-        <hr className="border-ink/10 my-6" />
+        {showMetaRule ? (
+          <div className="mt-6 flex items-center gap-[10px]">
+            <span className="font-meta-label text-ink-soft shrink-0 text-[9.5px]">
+              {photos.length} {photos.length === 1 ? "PHOTO" : "PHOTOS"}
+            </span>
+            <span className="h-px flex-1" style={{ background: "rgba(34,32,27,.12)" }} />
+            <span
+              className="font-meta-label shrink-0 text-[9.5px]"
+              style={{ color: "var(--color-brass)" }}
+            >
+              {DISPLAY_MODE_LABEL[page.displayMode]}
+            </span>
+          </div>
+        ) : (
+          <hr className="border-ink/10 my-6" />
+        )}
 
         {accessDenied ? (
           <p className="text-stamp text-sm">
@@ -148,15 +185,46 @@ export default async function TagPage({ params }: PageProps) {
         ) : photoError ? (
           <p className="text-stamp text-sm">{photoError}</p>
         ) : photos.length === 0 ? (
-          <p className="text-ink-soft text-center text-sm">
+          <p className="text-ink-soft mt-4 text-center text-sm">
             No photos match this page&rsquo;s filter yet.
           </p>
         ) : page.displayMode === "slideshow" ? (
-          <PhotoSlideshow photos={photos} intervalSec={page.slideshowIntervalSec} />
+          <div className="mt-4">
+            <PhotoSlideshow photos={photos} intervalSec={page.slideshowIntervalSec} />
+          </div>
         ) : (
-          <PhotoGrid photos={photos} />
+          <div className="mt-4">
+            <PhotoGrid photos={photos} />
+          </div>
         )}
       </div>
+
+      {nextPage && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-5 pb-[18px] pt-3"
+          style={{
+            background: "rgba(243,237,228,.96)",
+            borderTop: "1px solid rgba(34,32,27,.12)",
+            boxShadow: "0 -6px 18px rgba(34,32,27,.1)",
+          }}
+        >
+          <Link href={`/p/${nextPage.nfcSlug}`} className="flex w-full max-w-[480px] items-center gap-3">
+            <FittedPostmark label={nextPage.place || nextPage.country || nextPage.header} />
+            <div className="min-w-0 flex-1">
+              <p
+                className="font-meta-label text-ink-soft text-[8.5px]"
+                style={{ letterSpacing: "0.1em" }}
+              >
+                Next in this album
+              </p>
+              <p className="text-ink truncate text-[13.5px]">{nextPage.header}</p>
+            </div>
+            <span className="shrink-0 text-[15px]" style={{ color: "var(--color-brass)" }}>
+              ›
+            </span>
+          </Link>
+        </div>
+      )}
     </main>
   );
 }

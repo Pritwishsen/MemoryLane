@@ -5,8 +5,8 @@ import { authOptions } from "@/lib/authOptions";
 import { getAlbum, listPages } from "@/lib/albums";
 import { markInviteOpened } from "@/lib/invites";
 import SignInScreen from "@/components/SignInScreen";
-import MapLoader from "@/components/MapLoader";
 import AccountBadge from "@/components/AccountBadge";
+import AlbumSummaryClient from "@/components/AlbumSummaryClient";
 import type { Page } from "@/types/models";
 
 type PageProps = {
@@ -52,13 +52,21 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
       header: p.header,
       country: p.country,
       slug: p.nfcSlug,
+      albumTitle: album.title,
     }));
+
+  const rows = ordered.map((p) => ({
+    id: p.id,
+    header: p.header,
+    label: p.place || p.header,
+    slug: p.nfcSlug,
+  }));
 
   return (
     <main className="flex-1 px-5 py-8 sm:px-8">
       <div className="mx-auto w-full max-w-[480px]">
         <div className="flex items-center justify-between">
-          <Link href="/guest" className="font-meta-label text-ink-soft hover:text-ink">
+          <Link href="/guest" className="font-meta-label text-ink-soft hover:text-ink text-[9.5px]">
             ← Your albums
           </Link>
           <AccountBadge
@@ -69,35 +77,13 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
         </div>
 
         <div className="mt-5">
-          <h1 className="font-display text-ink text-2xl font-semibold">{album.title}</h1>
-          <p className="text-ink-soft mt-1 text-sm">
+          <h1 className="font-display text-ink text-[26px] font-semibold">{album.title}</h1>
+          <p className="text-ink-soft mt-1 text-[13px]">
             {album.introText || "Here’s everywhere we went — tap a souvenir to relive it"}
           </p>
         </div>
 
-        {pinned.length > 0 && (
-          <div className="mt-6">
-            <MapLoader pins={pinned} />
-          </div>
-        )}
-
-        <p className="font-meta-label text-ink-soft mt-8 text-xs">
-          Or browse pages directly:
-        </p>
-        {ordered.length === 0 ? (
-          <p className="text-ink-soft mt-3 text-sm">This album doesn&rsquo;t have any pages yet.</p>
-        ) : (
-          <ul className="mt-3 flex flex-col gap-2">
-            {ordered.map((p) => (
-              <li key={p.id}>
-                <Link href={`/p/${p.nfcSlug}`} className="text-ink hover:text-teal text-sm">
-                  {p.header}
-                  {p.place ? ` — ${p.place}` : ""}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <AlbumSummaryClient pins={pinned} rows={rows} />
       </div>
     </main>
   );
