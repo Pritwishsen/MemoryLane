@@ -15,7 +15,7 @@ declare module "next-auth" {
   interface Session {
     uid: string;
     accessToken?: string;
-    error?: "RefreshAccessTokenError";
+    error?: "RefreshAccessTokenError" | "InsufficientScopeError";
   }
 }
 
@@ -25,6 +25,6 @@ declare module "next-auth/jwt" {
     accessToken?: string;
     refreshToken?: string;
     accessTokenExpires?: number;
-    error?: "RefreshAccessTokenError";
+    error?: "RefreshAccessTokenError" | "InsufficientScopeError";
   }
 }

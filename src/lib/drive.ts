@@ -43,6 +43,21 @@ export class DriveApiError extends Error {
   }
 }
 
+/** Google returns this as a 403 with this exact message when the access
+ *  token doesn't carry the drive.readonly scope — happens when a host's
+ *  sign-in predates the scope being granted (a refresh can never add a
+ *  scope that wasn't in the original consent), or their account isn't yet
+ *  on the OAuth consent screen's test-user list. Distinguishing it from
+ *  other errors lets callers point the host at "sign out and back in"
+ *  instead of showing Google's raw, cryptic message. */
+function isInsufficientScopeError(err: unknown): boolean {
+  return (
+    err instanceof DriveApiError &&
+    err.status === 403 &&
+    /insufficient authentication scopes/i.test(err.message)
+  );
+}
+
 async function driveFetch(accessToken: string, path: string, params: Record<string, string>) {
   const url = new URL(`${FILES_ENDPOINT}${path}`);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
@@ -65,7 +80,7 @@ export async function checkDriveFolderAccess(
   folderId: string
 ): Promise<
   | { ok: true; name: string }
-  | { ok: false; error: string; reason: "not-shared" | "unknown" }
+  | { ok: false; error: string; reason: "not-shared" | "insufficient-scope" | "unknown" }
 > {
   try {
     const data = await driveFetch(accessToken, `/${folderId}`, {
@@ -79,6 +94,13 @@ export async function checkDriveFolderAccess(
     if (err instanceof DriveApiError && err.status === 404) {
       return { ok: false, error: err.message, reason: "not-shared" };
     }
+    if (isInsufficientScopeError(err)) {
+      return {
+        ok: false,
+        error: "Your Google sign-in needs to be refreshed to grant Drive access.",
+        reason: "insufficient-scope",
+      };
+    }
     const message = err instanceof Error ? err.message : "Couldn't access this folder yet";
     return { ok: false, error: message, reason: "unknown" };
   }
@@ -86,7 +108,12 @@ export async function checkDriveFolderAccess(
 
 export type DriveFolderCheckResult =
   | { folderId: string; ok: true; name: string }
-  | { folderId: string; ok: false; error: string; reason: "not-shared" | "unknown" };
+  | {
+      folderId: string;
+      ok: false;
+      error: string;
+      reason: "not-shared" | "insufficient-scope" | "unknown";
+    };
 
 export async function checkDriveFoldersAccess(
   accessToken: string,

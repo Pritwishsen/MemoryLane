@@ -71,6 +71,19 @@ export const authOptions: NextAuthOptions = {
           ? account.expires_at * 1000
           : undefined;
 
+        // Google can silently drop a requested scope from the grant (stale
+        // consent from before this scope existed, or the account isn't on
+        // the OAuth consent screen's test-user list while the app is in
+        // Testing mode) — `account.scope` is what was ACTUALLY granted, not
+        // what was requested. Catching this here means a host finds out
+        // right after signing in, rather than only when a Drive call fails
+        // later with Google's raw "insufficient authentication scopes"
+        // error (see DriveApiError/isInsufficientScopeError in lib/drive.ts).
+        const grantedScopes = account.scope?.split(" ") ?? [];
+        token.error = grantedScopes.includes("https://www.googleapis.com/auth/drive.readonly")
+          ? undefined
+          : "InsufficientScopeError";
+
         // Feature 2: create the users/{uid} doc on first login (spec-required).
         const db = getAdminDb();
         const userRef = db.collection("users").doc(token.uid);

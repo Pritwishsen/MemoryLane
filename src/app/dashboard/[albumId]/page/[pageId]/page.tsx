@@ -32,6 +32,7 @@ export default async function PageEditorPage({ params }: PageProps) {
       userName={session.user?.name ?? null}
       userImage={session.user?.image ?? null}
       userEmail={session.user?.email ?? null}
+      sessionError={session.error}
     />
   );
 }

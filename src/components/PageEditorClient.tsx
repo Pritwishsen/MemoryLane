@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import AccountBadge from "./AccountBadge";
 import type { DisplayMode, ImageFilter, Page } from "@/types/models";
 
@@ -15,13 +16,23 @@ type PageEditorClientProps = {
   userName: string | null;
   userImage: string | null;
   userEmail: string | null;
+  /** Set server-side (see page.tsx) when the host's OWN token is already
+   *  known to be bad before any Drive call is even attempted — e.g. it
+   *  doesn't carry the drive.readonly scope (see authOptions.ts's jwt
+   *  callback). Shown as a banner up front rather than waiting for the
+   *  per-folder check below to fail with Google's raw error text. */
+  sessionError?: "RefreshAccessTokenError" | "InsufficientScopeError";
 };
 
 type DriveCheckState =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "ok"; name: string }
-  | { status: "error"; message: string };
+  | {
+      status: "error";
+      message: string;
+      reason?: "not-shared" | "insufficient-scope" | "unknown";
+    };
 
 export default function PageEditorClient({
   albumId,
@@ -30,6 +41,7 @@ export default function PageEditorClient({
   userName,
   userImage,
   userEmail,
+  sessionError,
 }: PageEditorClientProps) {
   const [header, setHeader] = useState(page.header);
   const [bodyText, setBodyText] = useState(page.bodyText);
@@ -75,15 +87,24 @@ export default function PageEditorClient({
         `/api/albums/${albumId}/pages/${page.id}/drive-check?folderIds=${encodeURIComponent(folderIds.join(","))}`
       );
       const data = await res.json();
-      const results: Array<{ folderId: string; ok: boolean; name?: string; error?: string }> =
-        data.results ?? [];
+      const results: Array<{
+        folderId: string;
+        ok: boolean;
+        name?: string;
+        error?: string;
+        reason?: "not-shared" | "insufficient-scope" | "unknown";
+      }> = data.results ?? [];
       setDriveChecks(
         folderIds.map((id) => {
           const match = results.find((r) => r.folderId === id);
           if (!match) return { status: "error", message: "No result" };
           return match.ok
             ? { status: "ok", name: match.name ?? "" }
-            : { status: "error", message: match.error ?? "Couldn't access this folder" };
+            : {
+                status: "error",
+                message: match.error ?? "Couldn't access this folder",
+                reason: match.reason,
+              };
         })
       );
     } catch {
@@ -171,6 +192,23 @@ export default function PageEditorClient({
           <AccountBadge name={userName} image={userImage} email={userEmail} />
         </div>
 
+        {sessionError && (
+          <div className="border-stamp/30 bg-stamp/5 mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+            <p className="text-stamp text-xs">
+              {sessionError === "InsufficientScopeError"
+                ? "Your Google sign-in doesn't have Drive access yet — reconnect to add or check folders."
+                : "Your Google sign-in needs refreshing to keep working."}
+            </p>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/create" })}
+              className="text-stamp shrink-0 text-xs font-medium underline"
+            >
+              Sign out &amp; reconnect
+            </button>
+          </div>
+        )}
+
         <div className="mt-6 flex flex-col gap-6">
           <label className="block">
             <span className="text-ink-soft text-xs font-medium">Header</span>
@@ -246,7 +284,21 @@ export default function PageEditorClient({
                       <p className="text-teal mt-1 text-xs">✓ Connected to “{check.name}”</p>
                     )}
                     {check.status === "error" && (
-                      <p className="text-stamp mt-1 text-xs">{check.message}</p>
+                      <p className="text-stamp mt-1 text-xs">
+                        {check.message}
+                        {check.reason === "insufficient-scope" && (
+                          <>
+                            {" "}
+                            <button
+                              type="button"
+                              onClick={() => signOut({ callbackUrl: "/create" })}
+                              className="underline"
+                            >
+                              Sign out &amp; reconnect
+                            </button>
+                          </>
+                        )}
+                      </p>
                     )}
                   </div>
                 );

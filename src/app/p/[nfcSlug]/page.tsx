@@ -48,7 +48,10 @@ export default async function TagPage({ params }: PageProps) {
 
   if (folderIds.length > 0) {
     if (session.error || !session.accessToken) {
-      photoError = "There was a problem with your Google sign-in — try signing out and back in.";
+      photoError =
+        session.error === "InsufficientScopeError"
+          ? "Your Google sign-in doesn't have Drive access yet — try signing out and back in."
+          : "There was a problem with your Google sign-in — try signing out and back in.";
     } else {
       try {
         // Feature 6, the security-critical check: files.get on the folder
