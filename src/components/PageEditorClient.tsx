@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import AccountBadge from "./AccountBadge";
+import { countryToIso2 } from "@/lib/countries";
 import type { DisplayMode, ImageFilter, Page } from "@/types/models";
 
 type PageEditorClientProps = {
@@ -47,6 +48,13 @@ export default function PageEditorClient({
   const [bodyText, setBodyText] = useState(page.bodyText);
   const [place, setPlace] = useState(page.place ?? "");
   const [country, setCountry] = useState(page.country ?? "");
+  // Reflects the last SAVED place/country, not whatever's currently typed —
+  // geocoding only runs server-side on save (Nominatim's usage policy asks
+  // callers not to hammer it on every keystroke), so this can only ever be
+  // as fresh as the last save. Country-recognition below has no such cost
+  // and can react live to typing instead.
+  const [lat, setLat] = useState(page.lat);
+  const [lng, setLng] = useState(page.lng);
   const initialFolders = page.driveFolderIds?.length ? page.driveFolderIds : [""];
   const [driveFolderInputs, setDriveFolderInputs] = useState<string[]>(initialFolders);
   const [imageFilter, setImageFilter] = useState<ImageFilter>(page.imageFilter);
@@ -155,6 +163,8 @@ export default function PageEditorClient({
       const { page: updated } = await res.json();
       setHeader(updated.header);
       setNfcSlug(updated.nfcSlug);
+      setLat(updated.lat);
+      setLng(updated.lng);
       setToast("Saved");
 
       const savedFolders: string[] = updated.driveFolderIds ?? [];
@@ -170,6 +180,12 @@ export default function PageEditorClient({
       setSaving(false);
     }
   }
+
+  // Live — pure string lookup, no network call, safe to recompute on every keystroke.
+  const flagUnrecognized = country.trim() !== "" && !countryToIso2(country);
+  // Reflects the saved page (see the lat/lng state comment above): true once a place
+  // or country has actually been saved and Nominatim still couldn't place it.
+  const pinMissing = (place.trim() !== "" || country.trim() !== "") && (lat == null || lng == null);
 
   function handleCopyLink() {
     const url = `${window.location.origin}/p/${nfcSlug}`;
@@ -249,6 +265,25 @@ export default function PageEditorClient({
               />
             </label>
           </div>
+
+          {(pinMissing || flagUnrecognized) && (
+            <p className="text-stamp bg-stamp/5 rounded-lg p-3 text-xs leading-relaxed">
+              {pinMissing && (
+                <>
+                  ⚠ We couldn&rsquo;t place &ldquo;{[place, country].filter(Boolean).join(", ")}
+                  &rdquo; on the map, so this page won&rsquo;t get a pin yet — try being more
+                  specific (a nearby city, or the full country name).
+                </>
+              )}
+              {pinMissing && flagUnrecognized && <br />}
+              {flagUnrecognized && (
+                <>
+                  ⚠ &ldquo;{country}&rdquo; isn&rsquo;t a country name we recognize, so no flag
+                  will show for it{pinMissing ? "" : " on the map"}.
+                </>
+              )}
+            </p>
+          )}
 
           <div className="block">
             <span className="text-ink-soft text-xs font-medium">
