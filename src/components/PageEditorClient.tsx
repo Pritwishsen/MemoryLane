@@ -35,6 +35,109 @@ type DriveCheckState =
       reason?: "not-shared" | "insufficient-scope" | "unknown";
     };
 
+// GUEST_SCREENS.md option 5a's tile picker copy, verbatim.
+const DISPLAY_MODE_META: { mode: DisplayMode; name: string; hint: string }[] = [
+  { mode: "grid", name: "Grid", hint: "Two columns, tap to enlarge" },
+  { mode: "slideshow", name: "Slideshow", hint: "Auto-advances, tap sides to steer" },
+  { mode: "contact", name: "Contact sheet", hint: "Swipe sideways · best over 15 photos" },
+  { mode: "stack", name: "Stack", hint: "One print at a time · best under 10" },
+  { mode: "scrapbook", name: "Scrapbook", hint: "Mixed sizes, taped down" },
+  { mode: "gallery", name: "Gallery", hint: "Big photo with a thumbnail rail" },
+];
+
+const DIAGRAM_BLOCK = "#C9C0A9";
+
+/** A 54px-tall static mini layout diagram per display mode — plain divs on
+ *  --color-paper, per GUEST_SCREENS.md option 5a. Purely decorative, so
+ *  approximate shapes rather than literal miniatures of the real components. */
+function DisplayModeDiagram({ mode }: { mode: DisplayMode }) {
+  const base = "h-[54px] w-full overflow-hidden rounded-[4px]";
+
+  if (mode === "grid") {
+    return (
+      <div className={`${base} grid grid-cols-2 gap-1 p-1.5`} style={{ background: "var(--color-paper)" }}>
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} className="rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
+        ))}
+      </div>
+    );
+  }
+  if (mode === "slideshow") {
+    return (
+      <div
+        className={`${base} flex flex-col items-center justify-center gap-1.5`}
+        style={{ background: "var(--color-paper)" }}
+      >
+        <span className="h-8 w-10/12 rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
+        <span className="flex gap-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-1 w-1 rounded-full"
+              style={{ background: i === 0 ? "var(--color-teal)" : DIAGRAM_BLOCK }}
+            />
+          ))}
+        </span>
+      </div>
+    );
+  }
+  if (mode === "contact") {
+    return (
+      <div className={`${base} flex items-center gap-1 px-1.5`} style={{ background: "var(--color-ink)" }}>
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className="h-8 w-3 shrink-0 rounded-[1px]"
+            style={{ background: "rgba(243,237,228,.5)" }}
+          />
+        ))}
+      </div>
+    );
+  }
+  if (mode === "stack") {
+    return (
+      <div className={`${base} relative`} style={{ background: "var(--color-paper)" }}>
+        <span
+          className="absolute rounded-[2px]"
+          style={{ left: 22, top: 10, width: 22, height: 34, background: "#E2DAC6", transform: "rotate(6deg)" }}
+        />
+        <span
+          className="absolute rounded-[2px]"
+          style={{ left: 18, top: 8, width: 22, height: 34, background: "#D8CFB8", transform: "rotate(-3deg)" }}
+        />
+        <span
+          className="absolute rounded-[2px]"
+          style={{ left: 16, top: 6, width: 22, height: 34, background: DIAGRAM_BLOCK }}
+        />
+      </div>
+    );
+  }
+  if (mode === "scrapbook") {
+    return (
+      <div className={`${base} grid grid-cols-2 gap-1 p-1.5`} style={{ background: "var(--color-paper)" }}>
+        <span className="col-span-2 h-3 rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
+        <span className="h-5 rounded-[2px]" style={{ background: DIAGRAM_BLOCK, transform: "rotate(-2deg)" }} />
+        <span className="h-5 rounded-[2px]" style={{ background: DIAGRAM_BLOCK, transform: "rotate(2deg)" }} />
+      </div>
+    );
+  }
+  // gallery
+  return (
+    <div className={`${base} flex flex-col gap-1 p-1.5`} style={{ background: "var(--color-paper)" }}>
+      <span className="h-8 w-full rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
+      <span className="flex gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className="h-2 w-2 rounded-[1px]"
+            style={{ background: i === 0 ? "var(--color-brass)" : DIAGRAM_BLOCK }}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
 export default function PageEditorClient({
   albumId,
   page,
@@ -400,41 +503,62 @@ export default function PageEditorClient({
 
           <div>
             <span className="text-ink-soft text-xs font-medium">Display as</span>
-            <div className="mt-2 flex items-center gap-5">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="displayMode"
-                  checked={displayMode === "grid"}
-                  onChange={() => setDisplayMode("grid")}
-                />
-                Grid
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="displayMode"
-                  checked={displayMode === "slideshow"}
-                  onChange={() => setDisplayMode("slideshow")}
-                />
-                Slideshow
-              </label>
-              {displayMode === "slideshow" && (
-                <label className="flex items-center gap-2 text-sm">
-                  Time lapse:
-                  <input
-                    type="number"
-                    min={1}
-                    value={slideshowIntervalSec}
-                    onChange={(e) =>
-                      setSlideshowIntervalSec(Math.max(1, Number(e.target.value) || 1))
-                    }
-                    className="border-ink/15 w-16 rounded border bg-white px-2 py-1 text-sm"
-                  />
-                  sec
-                </label>
-              )}
+            <div className="mt-2 grid grid-cols-2 gap-3 min-[560px]:grid-cols-3">
+              {DISPLAY_MODE_META.map(({ mode, name, hint }) => {
+                const selected = displayMode === mode;
+                return (
+                  <label
+                    key={mode}
+                    className="cursor-pointer rounded-lg bg-white p-3"
+                    style={{
+                      border: selected ? "2px solid var(--color-teal)" : "2px solid rgba(34,32,27,.15)",
+                      boxShadow: selected ? "0 2px 6px rgba(31,78,74,.14)" : undefined,
+                    }}
+                  >
+                    <DisplayModeDiagram mode={mode} />
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="displayMode"
+                        checked={selected}
+                        onChange={() => setDisplayMode(mode)}
+                        className="h-[13px] w-[13px] shrink-0 appearance-none rounded-full bg-white"
+                        style={{
+                          border: selected ? "4px solid var(--color-teal)" : "1.5px solid rgba(34,32,27,.35)",
+                        }}
+                      />
+                      <span className={`text-ink text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>
+                        {name}
+                      </span>
+                    </div>
+                    <p className="text-ink-soft mt-1 text-[11.5px]">{hint}</p>
+                  </label>
+                );
+              })}
             </div>
+
+            {(displayMode === "slideshow" || displayMode === "gallery") && (
+              <div
+                className="mt-3 flex items-center gap-2 rounded-lg text-sm"
+                style={{
+                  background: "rgba(31,78,74,.06)",
+                  border: "1px solid rgba(31,78,74,.18)",
+                  padding: "12px 14px",
+                }}
+              >
+                Time lapse:
+                <input
+                  type="number"
+                  min={1}
+                  value={slideshowIntervalSec}
+                  onChange={(e) =>
+                    setSlideshowIntervalSec(Math.max(1, Number(e.target.value) || 1))
+                  }
+                  className="border-ink/15 w-16 rounded border bg-white px-2 py-1 text-sm"
+                />
+                sec
+              </div>
+            )}
           </div>
 
           <button
