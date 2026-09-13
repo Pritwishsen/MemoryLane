@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import PhotoLightbox from "./PhotoLightbox";
 
 export type DisplayPhoto = { id: string; name: string; url: string };
 
@@ -36,23 +37,7 @@ export default function PhotoGrid({ photos }: PhotoGridProps) {
       </div>
 
       {openIndex !== null && (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setOpenIndex(null)}
-          onKeyDown={(e) => e.key === "Escape" && setOpenIndex(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
-        >
-          <div className="relative h-full w-full max-w-3xl">
-            <Image
-              src={photos[openIndex].url}
-              alt={photos[openIndex].name}
-              fill
-              sizes="100vw"
-              className="object-contain"
-            />
-          </div>
-        </div>
+        <PhotoLightbox photos={photos} openIndex={openIndex} onClose={() => setOpenIndex(null)} />
       )}
     </>
   );

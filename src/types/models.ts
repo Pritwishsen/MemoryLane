@@ -19,7 +19,13 @@ export type Album = {
  *  actually works cross-account, since description is visible to anyone
  *  with read access to the file. */
 export type ImageFilter = "all" | "tagged";
-export type DisplayMode = "grid" | "slideshow";
+export type DisplayMode =
+  | "grid"
+  | "slideshow"
+  | "contact"
+  | "stack"
+  | "scrapbook"
+  | "gallery";
 
 export type Page = {
   id: string;

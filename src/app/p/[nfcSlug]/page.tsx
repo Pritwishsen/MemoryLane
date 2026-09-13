@@ -16,16 +16,26 @@ import Postmark from "@/components/Postmark";
 import FittedPostmark from "@/components/FittedPostmark";
 import PhotoGrid, { type DisplayPhoto } from "@/components/PhotoGrid";
 import PhotoSlideshow from "@/components/PhotoSlideshow";
+import PhotoContactSheet from "@/components/PhotoContactSheet";
+import PhotoStack from "@/components/PhotoStack";
+import PhotoScrapbook from "@/components/PhotoScrapbook";
+import PhotoGallery from "@/components/PhotoGallery";
 import type { DisplayMode } from "@/types/models";
 
 type PageProps = { params: Promise<{ nfcSlug: string }> };
 
-/** Part 2 (design_handoff_flag_map_pins v2) will extend DisplayMode with
- *  contact/stack/scrapbook/gallery and add their entries here. */
 const DISPLAY_MODE_LABEL: Record<DisplayMode, string> = {
   grid: "GRID",
   slideshow: "SLIDESHOW",
+  contact: "CONTACT SHEET",
+  stack: "STACK",
+  scrapbook: "SCRAPBOOK",
+  gallery: "GALLERY",
 };
+
+// Single-photo modes show one photo prominently at a time and get the full
+// 1600px image; multi-photo modes render many at once and stay at 800px.
+const SINGLE_PHOTO_MODES: DisplayMode[] = ["slideshow", "stack", "gallery"];
 
 function shuffle<T>(items: T[]): T[] {
   const result = [...items];
@@ -105,10 +115,9 @@ export default async function TagPage({ params }: PageProps) {
           if (page.imageFilter === "all" && page.randomizeAll) {
             images = shuffle(images).slice(0, page.randomLimit || images.length);
           }
-          // Grid thumbnails render small (~half the width of a 480px column)
-          // and don't need a full-size fetch — only the slideshow's single
-          // full-bleed photo does.
-          const imageSize = page.displayMode === "slideshow" ? 1600 : 800;
+          // Grid-like thumbnails render small and don't need a full-size
+          // fetch — only the single-photo-at-a-time modes do.
+          const imageSize = SINGLE_PHOTO_MODES.includes(page.displayMode) ? 1600 : 800;
           photos = images.map((img) => ({
             id: img.id,
             name: img.name,
@@ -191,6 +200,22 @@ export default async function TagPage({ params }: PageProps) {
         ) : page.displayMode === "slideshow" ? (
           <div className="mt-4">
             <PhotoSlideshow photos={photos} intervalSec={page.slideshowIntervalSec} />
+          </div>
+        ) : page.displayMode === "contact" ? (
+          <div className="mt-4">
+            <PhotoContactSheet photos={photos} />
+          </div>
+        ) : page.displayMode === "stack" ? (
+          <div className="mt-4">
+            <PhotoStack photos={photos} place={page.place || page.country} />
+          </div>
+        ) : page.displayMode === "scrapbook" ? (
+          <div className="mt-4">
+            <PhotoScrapbook photos={photos} />
+          </div>
+        ) : page.displayMode === "gallery" ? (
+          <div className="mt-4">
+            <PhotoGallery photos={photos} />
           </div>
         ) : (
           <div className="mt-4">
