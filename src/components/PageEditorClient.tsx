@@ -335,6 +335,7 @@ export default function PageEditorClient({
               value={header}
               onChange={(e) => setHeader(e.target.value)}
               className="border-ink/15 text-ink font-display mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-lg font-semibold focus:outline-none"
+              suppressHydrationWarning
             />
           </label>
 
@@ -345,6 +346,7 @@ export default function PageEditorClient({
               onChange={(e) => setBodyText(e.target.value)}
               rows={4}
               className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none"
+              suppressHydrationWarning
             />
           </label>
 
@@ -356,6 +358,7 @@ export default function PageEditorClient({
                 onChange={(e) => setPlace(e.target.value)}
                 placeholder="Jaipur"
                 className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
+                suppressHydrationWarning
               />
             </label>
             <label className="block flex-1">
@@ -365,6 +368,7 @@ export default function PageEditorClient({
                 onChange={(e) => setCountry(e.target.value)}
                 placeholder="India"
                 className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
+                suppressHydrationWarning
               />
             </label>
           </div>
@@ -403,6 +407,7 @@ export default function PageEditorClient({
                         onChange={(e) => updateFolderInput(i, e.target.value)}
                         placeholder="Paste a Drive folder link"
                         className="border-ink/15 text-ink w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
+                        suppressHydrationWarning
                       />
                       {driveFolderInputs.length > 1 && (
                         <button
@@ -460,6 +465,7 @@ export default function PageEditorClient({
                   name="imageFilter"
                   checked={imageFilter === "all"}
                   onChange={() => setImageFilter("all")}
+                  suppressHydrationWarning
                 />
                 All photos in folder
               </label>
@@ -470,6 +476,7 @@ export default function PageEditorClient({
                       type="checkbox"
                       checked={randomizeAll}
                       onChange={(e) => setRandomizeAll(e.target.checked)}
+                      suppressHydrationWarning
                     />
                     Randomize — pick a fresh random set each time, limit:
                     <input
@@ -479,6 +486,7 @@ export default function PageEditorClient({
                       onChange={(e) => setRandomLimit(Math.max(1, Number(e.target.value) || 1))}
                       disabled={!randomizeAll}
                       className="border-ink/15 ml-1 w-16 rounded border bg-white px-2 py-1 text-sm disabled:opacity-40"
+                      suppressHydrationWarning
                     />
                   </label>
                 </div>
@@ -489,6 +497,7 @@ export default function PageEditorClient({
                   name="imageFilter"
                   checked={imageFilter === "tagged"}
                   onChange={() => setImageFilter("tagged")}
+                  suppressHydrationWarning
                 />
                 Tagged — keyword:
                 <input
@@ -496,6 +505,7 @@ export default function PageEditorClient({
                   onChange={(e) => setTagKeyword(e.target.value)}
                   disabled={imageFilter !== "tagged"}
                   className="border-ink/15 ml-1 w-28 rounded border bg-white px-2 py-1 text-sm disabled:opacity-40"
+                  suppressHydrationWarning
                 />
               </label>
             </div>
@@ -526,6 +536,7 @@ export default function PageEditorClient({
                         style={{
                           border: selected ? "4px solid var(--color-teal)" : "1.5px solid rgba(34,32,27,.35)",
                         }}
+                        suppressHydrationWarning
                       />
                       <span className={`text-ink text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>
                         {name}
@@ -555,6 +566,7 @@ export default function PageEditorClient({
                     setSlideshowIntervalSec(Math.max(1, Number(e.target.value) || 1))
                   }
                   className="border-ink/15 w-16 rounded border bg-white px-2 py-1 text-sm"
+                  suppressHydrationWarning
                 />
                 sec
               </div>

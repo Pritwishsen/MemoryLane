@@ -8,7 +8,14 @@ import type { ImageFilter, DisplayMode, Page } from "@/types/models";
 type RouteContext = { params: Promise<{ albumId: string; pageId: string }> };
 
 const IMAGE_FILTERS: ImageFilter[] = ["all", "tagged"];
-const DISPLAY_MODES: DisplayMode[] = ["grid", "slideshow"];
+const DISPLAY_MODES: DisplayMode[] = [
+  "grid",
+  "slideshow",
+  "contact",
+  "stack",
+  "scrapbook",
+  "gallery",
+];
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const { session, unauthorized } = await requireSession();
