@@ -234,7 +234,10 @@ export default async function TagPage({ params }: PageProps) {
           }}
         >
           <Link href={`/p/${nextPage.nfcSlug}`} className="flex w-full max-w-[480px] items-center gap-3">
-            <FittedPostmark label={nextPage.place || nextPage.country || nextPage.header} />
+            <FittedPostmark
+              label={nextPage.place || nextPage.country || nextPage.header}
+              idHint={nextPage.id}
+            />
             <div className="min-w-0 flex-1">
               <p
                 className="font-meta-label text-ink-soft text-[8.5px]"

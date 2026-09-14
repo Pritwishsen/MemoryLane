@@ -62,7 +62,7 @@ export default function AlbumSummaryClient({ pins, rows }: AlbumSummaryClientPro
                   background: highlighted === placeKey ? "rgba(31,78,74,.06)" : undefined,
                 }}
               >
-                <FittedPostmark label={row.label} />
+                <FittedPostmark label={row.label} idHint={row.id} />
                 <span className="text-ink min-w-0 flex-1 truncate text-[14px]">{row.header}</span>
                 <span
                   className="shrink-0 text-[15px]"

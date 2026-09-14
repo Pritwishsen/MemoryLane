@@ -451,7 +451,11 @@ function ZoomAwarePins({
 
       {selectedCountryGroup && (
         <div
-          className="absolute left-[14px] top-[14px] z-[1000] flex items-center gap-2 rounded-full py-1.5 pl-2 pr-3"
+          // top-[64px], not top-[14px]: Leaflet's default zoom control sits
+          // top-left too (~10px margin, ~58px tall for its two stacked
+          // buttons), so at 14px this chip used to sit right on top of it,
+          // blocking the "+" button whenever a country was selected.
+          className="absolute left-[14px] top-[64px] z-[1000] flex items-center gap-2 rounded-full py-1.5 pl-2 pr-3"
           style={{
             background: "rgba(243,237,228,.94)",
             border: "1px solid rgba(34,32,27,.14)",
