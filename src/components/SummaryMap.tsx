@@ -35,10 +35,11 @@ type SummaryMapProps = {
   /** Fires on postmark hover/unhover so an external page-row list can
    *  highlight in sync the other direction. */
   onPlaceHover?: (key: string | null) => void;
-  /** Applied once, immediately after the map's initial fitBounds — e.g. -1
-   *  to land one zoom level further out than the bounds fit would naturally
-   *  land on. The guest landing page wants a bit more surrounding context
-   *  than the tight per-album summary map; other callers leave this unset. */
+  /** Applied once, immediately after the map's initial fitBounds — e.g. 2
+   *  to land two zoom levels further in than the bounds fit would naturally
+   *  land on. The guest landing page wants a closer first view than the
+   *  tight-but-zoomed-out bounds fit gives it; other callers leave this
+   *  unset. Positive zooms IN, negative zooms OUT. */
   initialZoomOffset?: number;
 };
 
