@@ -333,7 +333,7 @@ function ZoomAwarePins({
     const packets = groupByScreenProximity(
       groupByCountry(pins),
       map,
-      44,
+      35,
       (a, b) => b.count - a.count,
     );
     return (
@@ -404,10 +404,12 @@ function ZoomAwarePins({
   const selectedPlace = selectedPlaceKey
     ? placeGroups.find((g) => g.key === selectedPlaceKey)
     : null;
-  // RING_LABEL.md's "Crowding": 74px rings touch at 79px separation, so this
-  // reuses the country tier's screen-space grouping with the threshold
-  // raised to 80px, ranked by page count same as the country packets.
-  const placePackets = groupByScreenProximity(placeGroups, map, 80, (a, b) => b.pages.length - a.pages.length);
+  // RING_LABEL.md's "Crowding": rings touch at ~59px separation now that
+  // they've been sized down (SummaryMap's RING_SIZE), so this reuses the
+  // country tier's screen-space grouping with the threshold at 64px
+  // (reduced 20% from an initial 80px per review), ranked by page count
+  // same as the country packets.
+  const placePackets = groupByScreenProximity(placeGroups, map, 64, (a, b) => b.pages.length - a.pages.length);
 
   const allBounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
 
