@@ -4,20 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
-import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "flag-icons/css/flag-icons.min.css";
 import { countryToIso2 } from "@/lib/countries";
-import { fitPostmarkLabel } from "@/lib/postmarkLabel";
+import { ringLabelLayout, isNonLatinText } from "@/lib/postmarkLabel";
 import {
   groupByCountry,
   groupByPlace,
   tiltForKey,
   type MapPin,
   type CountryGroup,
+  type PlaceGroup,
 } from "@/lib/mapGrouping";
 
 export type { MapPin };
@@ -45,52 +43,85 @@ type SummaryMapProps = {
  *  apart" — reasonable for typical country sizes, not tuned per-country. */
 const COUNTRY_ZOOM_THRESHOLD = 6;
 
-/** A plain HTML div styled like the app's postmark badge — Leaflet's default
- *  marker icon is a pin graphic loaded from image files that need bundler
- *  config to resolve correctly; a divIcon sidesteps that entirely and keeps
- *  the map on-brand (see Postmark.tsx for the same visual motif). Label
- *  sizing/truncation math lives in lib/postmarkLabel.ts, shared with the
- *  non-Leaflet page-row postmark badge on the guest album summary screen. */
-function postmarkIcon(label: string, selected = false): L.DivIcon {
-  // 48px circle, minus the 2px border on each side and 4px of left/right
-  // padding on each side — the first/last letter otherwise sizes itself
-  // right up to (and visually into) the curved border. ~36px usable width.
-  const { fontSize, text } = fitPostmarkLabel(label, 36);
-  const ringColor = selected ? "var(--color-brass)" : "var(--color-teal)";
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
+/** Design: design_handoff_flag_map_pins/RING_LABEL.md (option 7b). The place
+ *  name runs along the inside of the postmark ring on a curved SVG textPath,
+ *  as on a real cancellation stamp, so it never truncates below the 8px
+ *  legibility floor the way the old shrink-to-fit flat badge could. One
+ *  badge, one state, at every zoom — no compact variant. Returns the inner
+ *  HTML only (not wrapped in L.divIcon) so placePacketIcon() below can
+ *  compose a full-detail front ring alongside plain faded ones behind it. */
+function ringPostmarkHtml(place: PlaceGroup, opts: { selected?: boolean } = {}): string {
+  const tilt = tiltForKey(place.key);
+  const stateClass = opts.selected ? " is-selected" : "";
+  // textPath's href resolves document-wide, so every marker needs its own
+  // path id or they'd all render the first marker's name (RING_LABEL.md).
+  const pathId = `ring-path-${place.key.replace(/[^a-z0-9]/gi, "") || "x"}`;
+
+  if (isNonLatinText(place.label)) {
+    // CJK/Devanagari/etc. set far wider per character and don't tolerate
+    // letter-spacing — name goes in a bigger inner disc instead, ring blank.
+    return `<div class="ring-postmark${stateClass}" style="--stamp-tilt:${tilt}deg;">
+      <div class="ring-postmark-inner is-name">${escapeHtml(place.label.toUpperCase())}</div>
+    </div>`;
+  }
+
+  const { text, letterSpacing } = ringLabelLayout(place.label);
+  const pageCount = place.pages.length;
+  return `<div class="ring-postmark${stateClass}" style="--stamp-tilt:${tilt}deg;">
+    <svg class="ring-postmark-svg" viewBox="0 0 74 74">
+      <defs><path id="${pathId}" d="M37,37 m-25,0 a25,25 0 1,1 50,0 a25,25 0 1,1 -50,0" /></defs>
+      <text class="ring-postmark-text" style="letter-spacing:${letterSpacing};">
+        <textPath href="#${pathId}" startOffset="25%" text-anchor="middle">${escapeHtml(text)}</textPath>
+      </text>
+    </svg>
+    <div class="ring-postmark-inner">${pageCount > 1 ? pageCount : ""}</div>
+  </div>`;
+}
+
+function postmarkIcon(place: PlaceGroup, opts: { selected?: boolean } = {}): L.DivIcon {
   return L.divIcon({
     className: "",
-    html: `<div style="
-      display:flex;align-items:center;justify-content:center;
-      width:48px;height:48px;border-radius:9999px;
-      border:2px solid ${ringColor};background:var(--color-paper);
-      color:var(--color-teal);font-family:var(--font-meta);
-      text-align:center;padding:3px 4px;box-sizing:border-box;
-      white-space:nowrap;overflow:hidden;
-      transform:rotate(-6deg);box-shadow:0 1px 3px rgba(0,0,0,0.25);
-      cursor:pointer;
-    "><span style="font-size:${fontSize}px;line-height:1;letter-spacing:0.02em;">${text}</span></div>`,
-    iconSize: [48, 48],
-    iconAnchor: [24, 24],
+    html: ringPostmarkHtml(place, opts),
+    iconSize: [74, 74],
+    iconAnchor: [37, 37],
   });
 }
 
-/** Same postmark visual language, filled solid, for a cluster of pages too
- *  close together to tell apart as separate pins at the current zoom. */
-function clusterIcon(count: number): L.DivIcon {
+/** Design: RING_LABEL.md's "Crowding" section — reuses the country tier's
+ *  screen-space packet grouping (option 2b) at place tier, threshold raised
+ *  to 80px since the ring badge is much bigger than the country stamp. The
+ *  front ring gets full detail (curved text + count disc); the up-to-two
+ *  rings fanned behind are plain and faded, matching the country packet's
+ *  treatment of its behind layers. Offsets are the country packet's own
+ *  (+8/+5, +14/+10) scaled up by the ring's ~2x size over the country stamp. */
+const PLACE_PACKET_BEHIND_OFFSETS = [
+  { left: 16, top: 10 },
+  { left: 29, top: 21 },
+];
+
+function placePacketIcon(members: PlaceGroup[]): L.DivIcon {
+  const behindLayers = PLACE_PACKET_BEHIND_OFFSETS.map((offset, i) =>
+    members[i + 1]
+      ? `<div class="ring-postmark-behind is-packet-behind-${i + 1}" style="left:${offset.left}px;top:${offset.top}px;"></div>`
+      : "",
+  ).join("");
+  const lastOffset = PLACE_PACKET_BEHIND_OFFSETS[Math.min(members.length, 3) - 2] ?? { left: 0, top: 0 };
+  const canvasW = 74 + lastOffset.left;
+  const canvasH = 74 + lastOffset.top;
+
   return L.divIcon({
     className: "",
-    html: `<div style="
-      display:flex;align-items:center;justify-content:center;
-      width:44px;height:44px;border-radius:9999px;
-      border:2px solid var(--color-teal);background:var(--color-teal);
-      color:var(--color-paper);font-family:var(--font-meta);
-      font-size:14px;font-weight:700;
-      transform:rotate(-6deg);box-shadow:0 1px 3px rgba(0,0,0,0.25);
-      cursor:pointer;
-    ">${count}</div>`,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
+    html: `<div class="place-packet" style="width:${canvasW}px;height:${canvasH}px;">
+      ${behindLayers}
+      <div class="place-packet-front">${ringPostmarkHtml(members[0])}</div>
+      <div class="place-packet-badge">+${members.length}</div>
+    </div>`,
+    iconSize: [canvasW, canvasH],
+    iconAnchor: [37, 37],
   });
 }
 
@@ -129,25 +160,36 @@ function countryIcon(
   });
 }
 
-/** Design: README option 2b. A packet of 2-3 country stamps whose ON-SCREEN
- *  positions crowd together at the current zoom (Europe at low zoom being
- *  the canonical case) — front stamp is whichever member has the most
- *  pages, at most two more fan out faded behind it, and a "+n" badge
- *  (n = every country in the packet) sits at the corner. A single member
+/** Design: README option 2b (country tier), reused for place-tier ring
+ *  packets per RING_LABEL.md's "Crowding" section — a packet of 2-3 pins
+ *  whose ON-SCREEN positions crowd together at the current zoom (Europe at
+ *  low zoom being the canonical country-tier case). "Front" is whichever
+ *  member sorts first by the caller's own criterion (page count, for both
+ *  tiers); at most two more fan out faded behind it, and a "+n" badge
+ *  (n = every member in the packet) sits at the corner. A single member
  *  with nothing nearby is still a "packet" of one — same shape either way,
  *  so the render loop doesn't need a separate branch for the crowded case. */
-type CountryPacket = { key: string; members: CountryGroup[]; bounds: [number, number][] };
+type ScreenPacket<T> = { key: string; members: T[] };
 
 /** Simplified single-pass clustering: each packet's membership is whatever
  *  falls within `radiusPx` of the FIRST not-yet-used pin encountered (in
  *  `groups` order), not a full transitive nearest-neighbor chain. That can
  *  occasionally miss merging two pins that are each close to a shared third
  *  pin but not to each other — an acceptable trade for staying O(n²) and
- *  simple, given country tier never has more than a few dozen pins. */
-function groupByScreenProximity(groups: CountryGroup[], map: L.Map, radiusPx: number): CountryPacket[] {
+ *  simple, given neither tier ever has more than a few dozen pins on screen
+ *  at once. Generic over the pin type so both the country tier (option 2b)
+ *  and the place-tier ring packets (RING_LABEL.md) share one implementation;
+ *  the caller supplies how to rank members within a packet since the two
+ *  tiers' group types don't share a common "size" field name. */
+function groupByScreenProximity<T extends { key: string; lat: number; lng: number }>(
+  groups: T[],
+  map: L.Map,
+  radiusPx: number,
+  sortMembers: (a: T, b: T) => number,
+): ScreenPacket<T>[] {
   const points = groups.map((g) => ({ group: g, pt: map.latLngToContainerPoint([g.lat, g.lng]) }));
   const used = new Set<string>();
-  const packets: CountryPacket[] = [];
+  const packets: ScreenPacket<T>[] = [];
 
   for (const anchor of points) {
     if (used.has(anchor.group.key)) continue;
@@ -160,12 +202,8 @@ function groupByScreenProximity(groups: CountryGroup[], map: L.Map, radiusPx: nu
         clique.push(other.group);
       }
     }
-    const members = clique.sort((a, b) => b.count - a.count);
-    packets.push({
-      key: members.map((m) => m.key).join("+"),
-      members,
-      bounds: members.flatMap((m) => m.bounds),
-    });
+    const members = clique.sort(sortMembers);
+    packets.push({ key: members.map((m) => m.key).join("+"), members });
   }
   return packets;
 }
@@ -253,7 +291,12 @@ function ZoomAwarePins({
   });
 
   if (isCountryTier) {
-    const packets = groupByScreenProximity(groupByCountry(pins), map, 44);
+    const packets = groupByScreenProximity(
+      groupByCountry(pins),
+      map,
+      44,
+      (a, b) => b.count - a.count,
+    );
     return (
       <>
         {packets.map((packet) => {
@@ -272,7 +315,7 @@ function ZoomAwarePins({
               }
               eventHandlers={{
                 click: () => {
-                  const bounds = L.latLngBounds(packet.bounds);
+                  const bounds = L.latLngBounds(packet.members.flatMap((m) => m.bounds));
                   if (isCrowded) {
                     // Tapping a packet only re-separates it (README: "does
                     // not open a list") — fitBounds naturally zooms in
@@ -322,34 +365,50 @@ function ZoomAwarePins({
   const selectedPlace = selectedPlaceKey
     ? placeGroups.find((g) => g.key === selectedPlaceKey)
     : null;
+  // RING_LABEL.md's "Crowding": 74px rings touch at 79px separation, so this
+  // reuses the country tier's screen-space grouping with the threshold
+  // raised to 80px, ranked by page count same as the country packets.
+  const placePackets = groupByScreenProximity(placeGroups, map, 80, (a, b) => b.pages.length - a.pages.length);
 
   const allBounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
 
   return (
     <>
-      <MarkerClusterGroup
-        showCoverageOnHover={false}
-        iconCreateFunction={(cluster: L.MarkerCluster) => clusterIcon(cluster.getChildCount())}
-      >
-        {placeGroups.map((group) => (
+      {placePackets.map((packet) => {
+        const front = packet.members[0];
+        const isCrowded = packet.members.length > 1;
+        return (
           <Marker
-            key={group.key}
-            position={[group.lat, group.lng]}
-            icon={postmarkIcon(
-              group.label,
-              group.key === selectedPlaceKey || group.key === highlightedPlaceKey,
-            )}
+            key={packet.key}
+            position={[front.lat, front.lng]}
+            icon={
+              isCrowded
+                ? placePacketIcon(packet.members)
+                : postmarkIcon(front, {
+                    selected: front.key === selectedPlaceKey || front.key === highlightedPlaceKey,
+                  })
+            }
             eventHandlers={{
-              click: () =>
-                group.pages.length === 1
-                  ? router.push(`/p/${group.pages[0].slug}`)
-                  : setSelectedPlaceKey(group.key),
-              mouseover: () => onPlaceHover?.(group.key),
-              mouseout: () => onPlaceHover?.(null),
+              click: () => {
+                if (isCrowded) {
+                  // RING_LABEL.md: tapping a packet only re-separates it,
+                  // same as the country tier — it does not open a list.
+                  const bounds = L.latLngBounds(packet.members.map((m) => [m.lat, m.lng] as [number, number]));
+                  map.fitBounds(bounds, { padding: [32, 32] });
+                  return;
+                }
+                if (front.pages.length === 1) {
+                  router.push(`/p/${front.pages[0].slug}`);
+                } else {
+                  setSelectedPlaceKey(front.key);
+                }
+              },
+              mouseover: () => !isCrowded && onPlaceHover?.(front.key),
+              mouseout: () => !isCrowded && onPlaceHover?.(null),
             }}
           />
-        ))}
-      </MarkerClusterGroup>
+        );
+      })}
 
       {selectedCountryGroup && (
         <div

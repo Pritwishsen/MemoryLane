@@ -253,6 +253,128 @@ body {
   opacity: 0.75;
 }
 
+/* Place-tier curved ring postmark (SummaryMap.tsx's ringPostmarkHtml()) —
+   design_handoff_flag_map_pins/RING_LABEL.md option 7b. Replaces the old
+   flat shrink-to-fit postmark badge; the place name runs on a curved SVG
+   textPath along the inside of the ring instead of shrinking to fit a flat
+   circle, so it never drops below the 8px legibility floor. One 74px badge,
+   one shape, at every zoom — no compact variant. */
+.ring-postmark {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  border-radius: 9999px;
+  background: var(--color-paper);
+  border: 2px solid var(--color-teal);
+  box-shadow: 0 1px 3px rgba(34, 32, 27, 0.25);
+  cursor: pointer;
+  transform: rotate(var(--stamp-tilt, 0deg));
+  transition:
+    border-color 140ms ease-out,
+    border-width 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+.ring-postmark:hover,
+.ring-postmark:active {
+  border-width: 2.5px;
+  box-shadow: 0 3px 8px rgba(34, 32, 27, 0.3);
+}
+.ring-postmark.is-selected {
+  border-width: 3px;
+  border-color: var(--color-brass);
+  box-shadow: 0 4px 10px rgba(34, 32, 27, 0.34);
+  z-index: 1000;
+}
+.ring-postmark-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.ring-postmark-text {
+  font-family: var(--font-meta);
+  font-weight: 700;
+  font-size: 8px;
+  fill: var(--color-teal);
+  text-transform: uppercase;
+}
+/* The inner disc — page count for multi-page places, empty for single-page
+   ones, or (RING_LABEL.md's non-Latin fallback) the whole place name at 44px
+   when the script can't take a curved letter-spaced baseline. */
+.ring-postmark-inner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: rgba(31, 78, 74, 0.08);
+  border: 1px solid rgba(31, 78, 74, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-meta);
+  font-weight: 700;
+  font-size: 9px;
+  color: var(--color-teal);
+  text-align: center;
+  overflow: hidden;
+}
+.ring-postmark-inner.is-name {
+  width: 44px;
+  height: 44px;
+  padding: 2px;
+  line-height: 1.15;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+}
+
+/* Crowded place-ring packet (RING_LABEL.md's "Crowding", reusing the country
+   packet's option-2b treatment at 80px) — a full-detail front ring plus up
+   to two plain, faded rings fanned behind it and a "+n" badge. */
+.place-packet {
+  position: relative;
+}
+.place-packet-front {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.ring-postmark-behind {
+  position: absolute;
+  width: 74px;
+  height: 74px;
+  border-radius: 9999px;
+  background: var(--color-paper);
+  border: 2px solid rgba(31, 78, 74, 0.5);
+  box-shadow: 0 2px 5px rgba(34, 32, 27, 0.2);
+}
+.ring-postmark-behind.is-packet-behind-1 {
+  opacity: 0.85;
+}
+.ring-postmark-behind.is-packet-behind-2 {
+  opacity: 0.65;
+}
+.place-packet-badge {
+  position: absolute;
+  left: 56px;
+  top: 56px;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: var(--color-teal);
+  color: var(--color-paper);
+  font-family: var(--font-meta);
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(34, 32, 27, 0.3);
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .country-stamp-frame {
     transition:
@@ -269,5 +391,8 @@ body {
   .country-stamp-frame.is-selected::after {
     animation: none;
     display: none;
+  }
+  .ring-postmark {
+    transition: none;
   }
 }
