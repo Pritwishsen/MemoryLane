@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
@@ -280,10 +280,20 @@ function ZoomAwarePins({
   // by the time useMap() returns something usable. useLayoutEffect (once,
   // via the empty dep array) nudges the already-fitted zoom before the
   // browser paints, rather than trying to catch a load/zoomend event that
-  // Leaflet doesn't fire for this particular transition.
+  // Leaflet doesn't fire for this particular transition. The ref guard
+  // matters in dev: React Strict Mode double-invokes mount effects, and
+  // without it the offset was silently applying twice (observed: +2 landing
+  // on +4 worth of zoom).
+  const appliedInitialZoomOffset = useRef(false);
   useLayoutEffect(() => {
-    if (initialZoomOffset) {
-      map.setZoom(map.getZoom() + initialZoomOffset);
+    if (initialZoomOffset && !appliedInitialZoomOffset.current) {
+      appliedInitialZoomOffset.current = true;
+      // animate:false matters here too — an animated setZoom this soon after
+      // the initial fitBounds gets silently reverted back to the fitted zoom
+      // (observed in dev: getZoom() right after an animated call still read
+      // the pre-adjustment value, and stayed that way). Unanimated applies
+      // synchronously and sticks.
+      map.setZoom(map.getZoom() + initialZoomOffset, { animate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
