@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
@@ -35,6 +35,11 @@ type SummaryMapProps = {
   /** Fires on postmark hover/unhover so an external page-row list can
    *  highlight in sync the other direction. */
   onPlaceHover?: (key: string | null) => void;
+  /** Applied once, immediately after the map's initial fitBounds — e.g. -1
+   *  to land one zoom level further out than the bounds fit would naturally
+   *  land on. The guest landing page wants a bit more surrounding context
+   *  than the tight per-album summary map; other callers leave this unset. */
+  initialZoomOffset?: number;
 };
 
 /** Below this zoom the map shows one pin per country (flag + place count);
@@ -54,6 +59,13 @@ function escapeHtml(s: string): string {
  *  badge, one state, at every zoom — no compact variant. Returns the inner
  *  HTML only (not wrapped in L.divIcon) so placePacketIcon() below can
  *  compose a full-detail front ring alongside plain faded ones behind it. */
+// RING_LABEL.md specs a 74px badge; sized down 20% per review. The 8px ring
+// text stays at its spec'd hard floor regardless (never scale below it) —
+// only the surrounding geometry shrinks.
+const RING_SIZE = 59;
+const RING_CENTER = RING_SIZE / 2;
+const RING_TEXT_RADIUS = 20;
+
 function ringPostmarkHtml(place: PlaceGroup, opts: { selected?: boolean } = {}): string {
   const tilt = tiltForKey(place.key);
   const stateClass = opts.selected ? " is-selected" : "";
@@ -71,9 +83,10 @@ function ringPostmarkHtml(place: PlaceGroup, opts: { selected?: boolean } = {}):
 
   const { text, letterSpacing } = ringLabelLayout(place.label);
   const pageCount = place.pages.length;
+  const d = `M${RING_CENTER},${RING_CENTER} m-${RING_TEXT_RADIUS},0 a${RING_TEXT_RADIUS},${RING_TEXT_RADIUS} 0 1,1 ${RING_TEXT_RADIUS * 2},0 a${RING_TEXT_RADIUS},${RING_TEXT_RADIUS} 0 1,1 -${RING_TEXT_RADIUS * 2},0`;
   return `<div class="ring-postmark${stateClass}" style="--stamp-tilt:${tilt}deg;">
-    <svg class="ring-postmark-svg" viewBox="0 0 74 74">
-      <defs><path id="${pathId}" d="M37,37 m-25,0 a25,25 0 1,1 50,0 a25,25 0 1,1 -50,0" /></defs>
+    <svg class="ring-postmark-svg" viewBox="0 0 ${RING_SIZE} ${RING_SIZE}">
+      <defs><path id="${pathId}" d="${d}" /></defs>
       <text class="ring-postmark-text" style="letter-spacing:${letterSpacing};">
         <textPath href="#${pathId}" startOffset="25%" text-anchor="middle">${escapeHtml(text)}</textPath>
       </text>
@@ -86,8 +99,8 @@ function postmarkIcon(place: PlaceGroup, opts: { selected?: boolean } = {}): L.D
   return L.divIcon({
     className: "",
     html: ringPostmarkHtml(place, opts),
-    iconSize: [74, 74],
-    iconAnchor: [37, 37],
+    iconSize: [RING_SIZE, RING_SIZE],
+    iconAnchor: [RING_CENTER, RING_CENTER],
   });
 }
 
@@ -97,10 +110,10 @@ function postmarkIcon(place: PlaceGroup, opts: { selected?: boolean } = {}): L.D
  *  front ring gets full detail (curved text + count disc); the up-to-two
  *  rings fanned behind are plain and faded, matching the country packet's
  *  treatment of its behind layers. Offsets are the country packet's own
- *  (+8/+5, +14/+10) scaled up by the ring's ~2x size over the country stamp. */
+ *  (+8/+5, +14/+10) scaled by the ring's size over the country stamp. */
 const PLACE_PACKET_BEHIND_OFFSETS = [
-  { left: 16, top: 10 },
-  { left: 29, top: 21 },
+  { left: 13, top: 8 },
+  { left: 23, top: 16 },
 ];
 
 function placePacketIcon(members: PlaceGroup[]): L.DivIcon {
@@ -110,8 +123,8 @@ function placePacketIcon(members: PlaceGroup[]): L.DivIcon {
       : "",
   ).join("");
   const lastOffset = PLACE_PACKET_BEHIND_OFFSETS[Math.min(members.length, 3) - 2] ?? { left: 0, top: 0 };
-  const canvasW = 74 + lastOffset.left;
-  const canvasH = 74 + lastOffset.top;
+  const canvasW = RING_SIZE + lastOffset.left;
+  const canvasH = RING_SIZE + lastOffset.top;
 
   return L.divIcon({
     className: "",
@@ -121,7 +134,7 @@ function placePacketIcon(members: PlaceGroup[]): L.DivIcon {
       <div class="place-packet-badge">+${members.length}</div>
     </div>`,
     iconSize: [canvasW, canvasH],
-    iconAnchor: [37, 37],
+    iconAnchor: [RING_CENTER, RING_CENTER],
   });
 }
 
@@ -250,14 +263,29 @@ function ZoomAwarePins({
   pins,
   highlightedPlaceKey,
   onPlaceHover,
+  initialZoomOffset,
 }: {
   pins: MapPin[];
   highlightedPlaceKey?: string | null;
   onPlaceHover?: (key: string | null) => void;
+  initialZoomOffset?: number;
 }) {
   const router = useRouter();
   const map = useMap();
   const [zoom, setZoom] = useState(map.getZoom());
+  // MapContainer's `bounds` prop is fitted synchronously while the map
+  // instance is created (before this child ever mounts) — there's no
+  // 'zoomend' event to hook for "after the initial fit", it's already done
+  // by the time useMap() returns something usable. useLayoutEffect (once,
+  // via the empty dep array) nudges the already-fitted zoom before the
+  // browser paints, rather than trying to catch a load/zoomend event that
+  // Leaflet doesn't fire for this particular transition.
+  useLayoutEffect(() => {
+    if (initialZoomOffset) {
+      map.setZoom(map.getZoom() + initialZoomOffset);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Drives the brass "selected" outline + one-shot pulse on the country pin
   // whose bounds the map is currently entering, and (step 5) the breadcrumb
   // chip at place tier. Only ever cleared by the "← World" pill, per the
@@ -509,6 +537,7 @@ export default function SummaryMap({
   heightClassName = "h-64",
   highlightedPlaceKey,
   onPlaceHover,
+  initialZoomOffset,
 }: SummaryMapProps) {
   const bounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
 
@@ -523,7 +552,12 @@ export default function SummaryMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <ZoomAwarePins pins={pins} highlightedPlaceKey={highlightedPlaceKey} onPlaceHover={onPlaceHover} />
+      <ZoomAwarePins
+        pins={pins}
+        highlightedPlaceKey={highlightedPlaceKey}
+        onPlaceHover={onPlaceHover}
+        initialZoomOffset={initialZoomOffset}
+      />
     </MapContainer>
   );
 }
