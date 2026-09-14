@@ -158,6 +158,12 @@ export default function PageEditorClient({
   // and can react live to typing instead.
   const [lat, setLat] = useState(page.lat);
   const [lng, setLng] = useState(page.lng);
+  // The exact place/country text that produced the lat/lng above, so the
+  // "couldn't place it" warning only shows while the fields still match what
+  // was actually geocoded — not the instant a fresh/edited page has null
+  // lat/lng before any save has even been attempted.
+  const [geocodedPlace, setGeocodedPlace] = useState(page.place ?? "");
+  const [geocodedCountry, setGeocodedCountry] = useState(page.country ?? "");
   const initialFolders = page.driveFolderIds?.length ? page.driveFolderIds : [""];
   const [driveFolderInputs, setDriveFolderInputs] = useState<string[]>(initialFolders);
   const [imageFilter, setImageFilter] = useState<ImageFilter>(page.imageFilter);
@@ -241,6 +247,8 @@ export default function PageEditorClient({
 
   async function handleSave() {
     setSaving(true);
+    const placeAtSave = place;
+    const countryAtSave = country;
     try {
       const res = await fetch(`/api/albums/${albumId}/pages/${page.id}`, {
         method: "PATCH",
@@ -268,6 +276,8 @@ export default function PageEditorClient({
       setNfcSlug(updated.nfcSlug);
       setLat(updated.lat);
       setLng(updated.lng);
+      setGeocodedPlace(placeAtSave);
+      setGeocodedCountry(countryAtSave);
       setToast("Saved");
 
       const savedFolders: string[] = updated.driveFolderIds ?? [];
@@ -287,8 +297,14 @@ export default function PageEditorClient({
   // Live — pure string lookup, no network call, safe to recompute on every keystroke.
   const flagUnrecognized = country.trim() !== "" && !countryToIso2(country);
   // Reflects the saved page (see the lat/lng state comment above): true once a place
-  // or country has actually been saved and Nominatim still couldn't place it.
-  const pinMissing = (place.trim() !== "" || country.trim() !== "") && (lat == null || lng == null);
+  // or country has actually been saved and Nominatim still couldn't place it. Only
+  // shown while the fields still match what was saved — editing them again hides it
+  // until the next save, rather than warning about text that was never geocoded.
+  const pinMissing =
+    (geocodedPlace.trim() !== "" || geocodedCountry.trim() !== "") &&
+    (lat == null || lng == null) &&
+    place === geocodedPlace &&
+    country === geocodedCountry;
 
   function handleCopyLink() {
     const url = `${window.location.origin}/p/${nfcSlug}`;
