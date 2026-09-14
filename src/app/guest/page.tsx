@@ -71,7 +71,7 @@ export default async function GuestPage() {
 
         {pins.length > 0 && (
           <div className="relative mt-5">
-            <MapLoader pins={pins} heightClassName="h-[212px]" initialZoomOffset={2} />
+            <MapLoader pins={pins} heightClassName="h-[212px]" initialZoomOffset={-1} />
             <div
               className="absolute bottom-3 left-3 z-[1000] rounded-full px-[11px] py-[5px]"
               style={{
