@@ -34,9 +34,9 @@ export default function PhotoContactSheet({ photos }: PhotoContactSheetProps) {
               type="button"
               onClick={() => setOpenIndex(i)}
               style={{ scrollSnapAlign: "start" }}
-              className="relative h-[112px] w-[150px] shrink-0 overflow-hidden bg-black/20"
+              className="relative h-[168px] w-[225px] shrink-0 overflow-hidden bg-black/20"
             >
-              <Image src={photo.url} alt={photo.name} fill sizes="150px" className="object-cover" />
+              <Image src={photo.url} alt={photo.name} fill sizes="225px" className="object-cover" />
             </button>
           ))}
         </div>

@@ -33,6 +33,9 @@ export default function PhotoStack({ photos, place }: PhotoStackProps) {
     (photo, layer, arr) => photo && arr.findIndex((p) => p?.id === photo.id) === layer
   );
 
+  // Alternate the exit direction per card so the deal doesn't always go the same way.
+  const exitDirection = index % 2 === 0 ? -1 : 1;
+
   return (
     <div>
       <div className="relative" style={{ height: 330 }}>
@@ -54,7 +57,7 @@ export default function PhotoStack({ photos, place }: PhotoStackProps) {
                 boxShadow: style.boxShadow,
                 transform:
                   isFront && exiting
-                    ? "translateX(-120%) rotate(-14deg)"
+                    ? `translateX(${exitDirection * 120}%) rotate(${exitDirection * 14}deg)`
                     : `rotate(${style.rotate}deg)`,
                 transition: isFront ? "transform 260ms ease-in" : undefined,
                 zIndex: LAYERS.length - layer,

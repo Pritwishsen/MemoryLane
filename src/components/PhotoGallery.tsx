@@ -64,8 +64,10 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
               key={photo.id}
               type="button"
               onClick={() => setActive(index)}
-              className="relative h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[3px]"
+              className="relative h-[54px] min-w-0 overflow-hidden rounded-[3px]"
               style={{
+                flex: "1 1 54px",
+                maxWidth: 54,
                 opacity: index === active ? 1 : 0.65,
                 outline: index === active ? "2px solid var(--color-brass)" : undefined,
                 outlineOffset: index === active ? 1 : undefined,
