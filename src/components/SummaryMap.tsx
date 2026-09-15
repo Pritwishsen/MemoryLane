@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
@@ -60,12 +60,13 @@ function escapeHtml(s: string): string {
  *  badge, one state, at every zoom — no compact variant. Returns the inner
  *  HTML only (not wrapped in L.divIcon) so placePacketIcon() below can
  *  compose a full-detail front ring alongside plain faded ones behind it. */
-// RING_LABEL.md specs a 74px badge; sized down 20% per review. The 8px ring
-// text stays at its spec'd hard floor regardless (never scale below it) —
-// only the surrounding geometry shrinks.
-const RING_SIZE = 59;
+// RING_LABEL.md specs a 74px badge; sized down 20% per review to 59px, then
+// another 20% per a later review to 47px. The 8px ring text stays at its
+// spec'd hard floor regardless (never scale below it) — only the
+// surrounding geometry shrinks.
+const RING_SIZE = 47;
 const RING_CENTER = RING_SIZE / 2;
-const RING_TEXT_RADIUS = 20;
+const RING_TEXT_RADIUS = 16;
 
 function ringPostmarkHtml(place: PlaceGroup, opts: { selected?: boolean } = {}): string {
   const tilt = tiltForKey(place.key);
@@ -84,12 +85,22 @@ function ringPostmarkHtml(place: PlaceGroup, opts: { selected?: boolean } = {}):
 
   const { text, letterSpacing } = ringLabelLayout(place.label);
   const pageCount = place.pages.length;
-  const d = `M${RING_CENTER},${RING_CENTER} m-${RING_TEXT_RADIUS},0 a${RING_TEXT_RADIUS},${RING_TEXT_RADIUS} 0 1,1 ${RING_TEXT_RADIUS * 2},0 a${RING_TEXT_RADIUS},${RING_TEXT_RADIUS} 0 1,1 -${RING_TEXT_RADIUS * 2},0`;
+  // Path starts at the BOTTOM of the ring (not the left/west point) so that
+  // startOffset 50% — the diametrically opposite point, the top — has the
+  // full circumference split evenly on both sides. A textPath can't render
+  // past either end of its path: starting the path at the west point with
+  // startOffset 25% (the old version) only left 25% of the circumference
+  // behind the text-anchor="middle" label's start, so anything longer than
+  // that got its FRONT silently clipped — "Vatican City" rendered as
+  // "tican City", "East Sussex" as "st Sussex". Centering the text on the
+  // point farthest from the path's start/end gives it the most room
+  // possible in both directions.
+  const d = `M${RING_CENTER},${RING_CENTER + RING_TEXT_RADIUS} a${RING_TEXT_RADIUS},${RING_TEXT_RADIUS} 0 1,1 0,-${RING_TEXT_RADIUS * 2} a${RING_TEXT_RADIUS},${RING_TEXT_RADIUS} 0 1,1 0,${RING_TEXT_RADIUS * 2}`;
   return `<div class="ring-postmark${stateClass}" style="--stamp-tilt:${tilt}deg;">
     <svg class="ring-postmark-svg" viewBox="0 0 ${RING_SIZE} ${RING_SIZE}">
       <defs><path id="${pathId}" d="${d}" /></defs>
       <text class="ring-postmark-text" style="letter-spacing:${letterSpacing};">
-        <textPath href="#${pathId}" startOffset="25%" text-anchor="middle">${escapeHtml(text)}</textPath>
+        <textPath href="#${pathId}" startOffset="50%" text-anchor="middle">${escapeHtml(text)}</textPath>
       </text>
     </svg>
     <div class="ring-postmark-inner">${pageCount > 1 ? pageCount : ""}</div>
@@ -111,10 +122,11 @@ function postmarkIcon(place: PlaceGroup, opts: { selected?: boolean } = {}): L.D
  *  front ring gets full detail (curved text + count disc); the up-to-two
  *  rings fanned behind are plain and faded, matching the country packet's
  *  treatment of its behind layers. Offsets are the country packet's own
- *  (+8/+5, +14/+10) scaled by the ring's size over the country stamp. */
+ *  (+8/+5, +14/+10) scaled by the ring's size over the country stamp, then
+ *  rescaled again alongside RING_SIZE's own later 20% reduction. */
 const PLACE_PACKET_BEHIND_OFFSETS = [
-  { left: 13, top: 8 },
-  { left: 23, top: 16 },
+  { left: 10, top: 6 },
+  { left: 18, top: 13 },
 ];
 
 function placePacketIcon(members: PlaceGroup[]): L.DivIcon {
@@ -157,14 +169,14 @@ function placePacketIcon(members: PlaceGroup[]): L.DivIcon {
 function countryIcon(
   iso2: string | null,
   tiltKey: string,
-  opts: { selected?: boolean; loading?: boolean } = {},
+  opts: { loading?: boolean } = {},
 ): L.DivIcon {
   const tilt = tiltForKey(tiltKey);
   const showFallback = opts.loading || !iso2;
   const flagHtml = showFallback
     ? `<span class="country-stamp-flag country-stamp-fallback"></span>`
     : `<span class="country-stamp-flag fi fi-${iso2!.toLowerCase()}"></span>`;
-  const stateClass = opts.selected ? " is-selected" : opts.loading ? " is-loading" : "";
+  const stateClass = opts.loading ? " is-loading" : "";
 
   return L.divIcon({
     className: "",
@@ -185,15 +197,39 @@ function countryIcon(
  *  so the render loop doesn't need a separate branch for the crowded case. */
 type ScreenPacket<T> = { key: string; members: T[] };
 
-/** Simplified single-pass clustering: each packet's membership is whatever
- *  falls within `radiusPx` of the FIRST not-yet-used pin encountered (in
- *  `groups` order), not a full transitive nearest-neighbor chain. That can
- *  occasionally miss merging two pins that are each close to a shared third
- *  pin but not to each other — an acceptable trade for staying O(n²) and
- *  simple, given neither tier ever has more than a few dozen pins on screen
- *  at once. Generic over the pin type so both the country tier (option 2b)
- *  and the place-tier ring packets (RING_LABEL.md) share one implementation;
- *  the caller supplies how to rank members within a packet since the two
+/** Complete-linkage agglomerative clustering: a packet's on-screen diameter
+ *  (the max distance between ANY two of its members, not just adjacent
+ *  ones) is capped at `radiusPx`, so every member genuinely looks crowded
+ *  against every other member — matches what "a packet" should mean
+ *  visually. Repeatedly merges whichever pair of clusters has the smallest
+ *  complete-linkage distance, provided that distance is still within
+ *  `radiusPx`, until no more merges qualify; picking the globally-smallest
+ *  qualifying pair each round means the result doesn't depend on the order
+ *  pins arrive in `groups`.
+ *
+ *  Two earlier approaches were tried and rejected:
+ *  - A single-pass anchor-sweep (each packet was whatever fell within
+ *    radius of the first not-yet-used pin in `groups` order) made packet
+ *    membership depend on incoming array order — e.g. Germany could get
+ *    swept into a distant country's packet just because it was near
+ *    whichever pin got processed first, while a genuinely close country
+ *    dodged the same packet because it wasn't near that specific anchor.
+ *  - Union-find single-linkage transitive clustering (A near B, B near C
+ *    ⇒ A/B/C cluster, regardless of whether A and C are near each other)
+ *    fixed the order-dependence but chained through long strings of
+ *    near-neighbors into packets spanning far more of the map than
+ *    `radiusPx` — observed live as e.g. a single packet pulling in 10+
+ *    countries stretching across most of Europe. Complete-linkage avoids
+ *    both failure modes at the cost of leaving a pin ungrouped if it's
+ *    close to only *part* of a cluster rather than all of it — an
+ *    acceptable trade since the alternative was a visually misleading
+ *    "packet."
+ *
+ *  O(n³)-ish (n² pairs re-scanned per merge, up to n merges) but fine given
+ *  neither tier ever has more than a few dozen pins on screen at once.
+ *  Generic over the pin type so both the country tier (option 2b) and the
+ *  place-tier ring packets (RING_LABEL.md) share one implementation; the
+ *  caller supplies how to rank members within a packet since the two
  *  tiers' group types don't share a common "size" field name. */
 function groupByScreenProximity<T extends { key: string; lat: number; lng: number }>(
   groups: T[],
@@ -201,25 +237,43 @@ function groupByScreenProximity<T extends { key: string; lat: number; lng: numbe
   radiusPx: number,
   sortMembers: (a: T, b: T) => number,
 ): ScreenPacket<T>[] {
-  const points = groups.map((g) => ({ group: g, pt: map.latLngToContainerPoint([g.lat, g.lng]) }));
-  const used = new Set<string>();
-  const packets: ScreenPacket<T>[] = [];
+  const points = groups.map((g) => map.latLngToContainerPoint([g.lat, g.lng]));
 
-  for (const anchor of points) {
-    if (used.has(anchor.group.key)) continue;
-    used.add(anchor.group.key);
-    const clique = [anchor.group];
-    for (const other of points) {
-      if (used.has(other.group.key)) continue;
-      if (anchor.pt.distanceTo(other.pt) <= radiusPx) {
-        used.add(other.group.key);
-        clique.push(other.group);
+  function completeLinkageDistance(a: number[], b: number[]): number {
+    let max = 0;
+    for (const i of a) {
+      for (const j of b) {
+        const d = points[i].distanceTo(points[j]);
+        if (d > max) max = d;
       }
     }
-    const members = clique.sort(sortMembers);
-    packets.push({ key: members.map((m) => m.key).join("+"), members });
+    return max;
   }
-  return packets;
+
+  const clusters: number[][] = groups.map((_, i) => [i]);
+  for (;;) {
+    let bestI = -1;
+    let bestJ = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const dist = completeLinkageDistance(clusters[i], clusters[j]);
+        if (dist <= radiusPx && dist < bestDist) {
+          bestDist = dist;
+          bestI = i;
+          bestJ = j;
+        }
+      }
+    }
+    if (bestI === -1) break;
+    clusters[bestI] = clusters[bestI].concat(clusters[bestJ]);
+    clusters.splice(bestJ, 1);
+  }
+
+  return clusters.map((indices) => {
+    const members = indices.map((i) => groups[i]).sort(sortMembers);
+    return { key: members.map((m) => m.key).join("+"), members };
+  });
 }
 
 /** Front-plus-fanned-behind stamps for a crowded packet (README option 2b).
@@ -297,11 +351,13 @@ function ZoomAwarePins({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Drives the brass "selected" outline + one-shot pulse on the country pin
-  // whose bounds the map is currently entering, and (step 5) the breadcrumb
-  // chip at place tier. Only ever cleared by the "← World" pill, per the
-  // design spec — not by zoom — so it's still correct if the guest zooms
-  // back out to the country tier after drilling in.
+  // Which country (if any) the guest drilled into to get here — drives the
+  // breadcrumb chip at place tier and the "← World" pill's target. No longer
+  // highlights the country stamp itself at country tier (dropped per user
+  // feedback: the breadcrumb chip already communicates the selection, and
+  // since this is only ever cleared by the "← World" pill, not by zoom, a
+  // stamp-level highlight would otherwise stay lit after zooming back out
+  // past the country tier).
   const [selectedCountryKey, setSelectedCountryKey] = useState<string | null>(null);
   // Drives the bottom place sheet, shown when a place with more than one
   // page is tapped at place tier. Reset below whenever the map drops back to
@@ -329,6 +385,23 @@ function ZoomAwarePins({
     moveend: () => forcePacketRecompute((n) => n + 1),
   });
 
+  // The breadcrumb chip lives in the same top-left corner as Leaflet's
+  // default zoom control. Rather than tuck the chip below the control (as
+  // before), push the control itself down out of the chip's way — the chip
+  // belongs in the actual top-left corner. The offset is applied once, for
+  // good, on mount — never toggled based on tier or selection — so the
+  // control never visibly moves. Two earlier versions of this both still
+  // moved the control: keying the offset to whether a country was selected
+  // made it jump every time the chip showed/hid within place tier, and
+  // keying it to tier instead just moved the jump to the country↔place
+  // transition (zooming out reset the margin, so the control jumped up).
+  // Reaches into the Leaflet control's real DOM node (outside React's tree)
+  // since react-leaflet doesn't expose a position/offset prop for it.
+  useEffect(() => {
+    const container = map.zoomControl?.getContainer();
+    if (container) container.style.marginTop = "50px";
+  }, [map]);
+
   if (isCountryTier) {
     const packets = groupByScreenProximity(
       groupByCountry(pins),
@@ -346,19 +419,23 @@ function ZoomAwarePins({
               key={packet.key}
               position={[front.lat, front.lng]}
               icon={
-                isCrowded
-                  ? packetIcon(packet.members)
-                  : countryIcon(countryToIso2(front.country), front.key, {
-                      selected: front.key === selectedCountryKey,
-                    })
+                isCrowded ? packetIcon(packet.members) : countryIcon(countryToIso2(front.country), front.key)
               }
               eventHandlers={{
                 click: () => {
-                  const bounds = L.latLngBounds(packet.members.flatMap((m) => m.bounds));
                   if (isCrowded) {
+                    // Fit to the packet members' own displayed positions
+                    // (their centroids) — not every underlying pin. Using
+                    // full pin bounds here (as this used to) meant a
+                    // country whose own pins are widely spread (e.g. Italy:
+                    // Capri to Lake Garda) could dominate the packet's
+                    // bounding box on its own, so fitBounds landed on
+                    // nearly the same view and the packet never visibly
+                    // separated — tapping it looked like it did nothing.
                     // Tapping a packet only re-separates it (README: "does
-                    // not open a list") — fitBounds naturally zooms in
-                    // enough to pull the crowded pins apart on screen.
+                    // not open a list"), so it only ever needs to pull the
+                    // member stamps apart on screen, not reveal every pin.
+                    const bounds = L.latLngBounds(packet.members.map((m) => [m.lat, m.lng] as [number, number]));
                     map.fitBounds(bounds, { padding: [32, 32] });
                     return;
                   }
@@ -372,6 +449,7 @@ function ZoomAwarePins({
                   // into place-tier, and a single-pin country (zero-area
                   // bounds, which would otherwise fit at max zoom) doesn't
                   // land at a near-street-level view either.
+                  const bounds = L.latLngBounds(front.bounds);
                   setSelectedCountryKey(front.key);
                   const naturalZoom = map.getBoundsZoom(bounds, false, L.point(32, 32));
                   const targetZoom = Math.min(Math.max(naturalZoom, COUNTRY_ZOOM_THRESHOLD), 13);
@@ -404,12 +482,12 @@ function ZoomAwarePins({
   const selectedPlace = selectedPlaceKey
     ? placeGroups.find((g) => g.key === selectedPlaceKey)
     : null;
-  // RING_LABEL.md's "Crowding": rings touch at ~59px separation now that
-  // they've been sized down (SummaryMap's RING_SIZE), so this reuses the
-  // country tier's screen-space grouping with the threshold at 64px
-  // (reduced 20% from an initial 80px per review), ranked by page count
-  // same as the country packets.
-  const placePackets = groupByScreenProximity(placeGroups, map, 64, (a, b) => b.pages.length - a.pages.length);
+  // RING_LABEL.md's "Crowding": rings touch at ~47px separation now that
+  // they've been sized down twice (SummaryMap's RING_SIZE), so this reuses
+  // the country tier's screen-space grouping with the threshold at 51px
+  // (reduced 20% from 64px, itself already reduced 20% from an initial
+  // 80px per review), ranked by page count same as the country packets.
+  const placePackets = groupByScreenProximity(placeGroups, map, 51, (a, b) => b.pages.length - a.pages.length);
 
   const allBounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
 
@@ -453,11 +531,10 @@ function ZoomAwarePins({
 
       {selectedCountryGroup && (
         <div
-          // top-[64px], not top-[14px]: Leaflet's default zoom control sits
-          // top-left too (~10px margin, ~58px tall for its two stacked
-          // buttons), so at 14px this chip used to sit right on top of it,
-          // blocking the "+" button whenever a country was selected.
-          className="absolute left-[14px] top-[64px] z-[1000] flex items-center gap-2 rounded-full py-1.5 pl-2 pr-3"
+          // The actual top-left corner — the zoom control gets pushed down
+          // out of the way instead (see the marginTop effect above) rather
+          // than the chip tucking in below it.
+          className="absolute left-[14px] top-[14px] z-[1000] flex items-center gap-2 rounded-full py-1.5 pl-2 pr-3"
           style={{
             background: "rgba(243,237,228,.94)",
             border: "1px solid rgba(34,32,27,.14)",

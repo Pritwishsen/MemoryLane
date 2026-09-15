@@ -48,11 +48,19 @@ const COUNTRY_TO_ISO2: Record<string, string> = {
   tonga: "TO", "trinidad and tobago": "TT", tunisia: "TN", turkey: "TR",
   turkmenistan: "TM", tuvalu: "TV", uganda: "UG", ukraine: "UA",
   "united arab emirates": "AE", uae: "AE",
-  "united kingdom": "GB", uk: "GB", "great britain": "GB", england: "GB",
-  scotland: "GB", wales: "GB",
+  "united kingdom": "GB", uk: "GB", "great britain": "GB",
+  // England/Scotland/Wales/Northern Ireland aren't ISO 3166-1 countries of
+  // their own, so there's no "real" alpha-2 code for them — but flag-icons
+  // ships their flags under its own gb-* extension codes (St George's
+  // Cross, Saltire, Red Dragon, Ulster Banner), and every ISO2 consumer in
+  // this app just lowercases this value into a `fi-*` class name, so these
+  // work as drop-in "codes" even though they're not real ISO2. Without
+  // this, a host typing the constituent country name got the Union Jack
+  // instead of the flag they'd actually expect.
+  england: "GB-ENG", scotland: "GB-SCT", wales: "GB-WLS", "northern ireland": "GB-NIR",
   "united states": "US", "united states of america": "US", usa: "US",
   "us": "US", america: "US",
-  uruguay: "UY", uzbekistan: "UZ", vanuatu: "VU", "vatican city": "VA",
+  uruguay: "UY", uzbekistan: "UZ", vanuatu: "VU", "vatican city": "VA", vatican: "VA",
   venezuela: "VE", vietnam: "VN", "vietnam socialist republic": "VN",
   yemen: "YE", zambia: "ZM", zimbabwe: "ZW",
 };

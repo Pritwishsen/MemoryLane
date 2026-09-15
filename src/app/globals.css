@@ -98,40 +98,6 @@ body {
   height: 23px;
 }
 
-.country-stamp-frame.is-selected {
-  padding: 4px;
-  outline: 2px solid var(--color-brass);
-  box-shadow: 0 4px 10px rgba(34, 32, 27, 0.34);
-  transform: rotate(0deg) scale(1.15);
-}
-.country-stamp-frame.is-selected .country-stamp-flag {
-  width: 34px;
-  height: 24px;
-}
-.country-stamp-frame.is-selected::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 30px;
-  height: 30px;
-  border-radius: 9999px;
-  background: rgba(31, 78, 74, 0.28);
-  opacity: 0.55;
-  animation: country-stamp-pulse 2.2s ease-out 1;
-  pointer-events: none;
-}
-@keyframes country-stamp-pulse {
-  from {
-    transform: scale(0.7);
-    opacity: 0.55;
-  }
-  to {
-    transform: scale(1.9);
-    opacity: 0;
-  }
-}
-
 .country-stamp-frame.is-loading {
   outline-color: rgba(31, 78, 74, 0.35);
   box-shadow: none;
@@ -257,13 +223,13 @@ body {
    design_handoff_flag_map_pins/RING_LABEL.md option 7b. Replaces the old
    flat shrink-to-fit postmark badge; the place name runs on a curved SVG
    textPath along the inside of the ring instead of shrinking to fit a flat
-   circle, so it never drops below the 8px legibility floor. One 59px badge
-   (RING_LABEL.md specs 74px; sized down 20% per review), one shape, at
-   every zoom — no compact variant. */
+   circle, so it never drops below the 8px legibility floor. One 47px badge
+   (RING_LABEL.md specs 74px; sized down 20% per review to 59px, then
+   another 20% to 47px), one shape, at every zoom — no compact variant. */
 .ring-postmark {
   position: relative;
-  width: 59px;
-  height: 59px;
+  width: 47px;
+  height: 47px;
   border-radius: 9999px;
   background: var(--color-paper);
   border: 2px solid var(--color-teal);
@@ -307,8 +273,8 @@ body {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 21px;
-  height: 21px;
+  width: 17px;
+  height: 17px;
   border-radius: 9999px;
   background: rgba(31, 78, 74, 0.08);
   border: 1px solid rgba(31, 78, 74, 0.45);
@@ -317,14 +283,14 @@ body {
   justify-content: center;
   font-family: var(--font-meta);
   font-weight: 700;
-  font-size: 9px;
+  font-size: 7px;
   color: var(--color-teal);
   text-align: center;
   overflow: hidden;
 }
 .ring-postmark-inner.is-name {
-  width: 35px;
-  height: 35px;
+  width: 28px;
+  height: 28px;
   padding: 2px;
   line-height: 1.15;
   text-transform: uppercase;
@@ -344,8 +310,8 @@ body {
 }
 .ring-postmark-behind {
   position: absolute;
-  width: 59px;
-  height: 59px;
+  width: 47px;
+  height: 47px;
   border-radius: 9999px;
   background: var(--color-paper);
   border: 2px solid rgba(31, 78, 74, 0.5);
@@ -359,8 +325,8 @@ body {
 }
 .place-packet-badge {
   position: absolute;
-  left: 45px;
-  top: 45px;
+  left: 36px;
+  top: 36px;
   min-width: 22px;
   height: 18px;
   padding: 0 5px;
@@ -385,13 +351,6 @@ body {
   .country-stamp-frame:hover,
   .country-stamp-frame:active {
     transform: rotate(var(--stamp-tilt, 0deg));
-  }
-  .country-stamp-frame.is-selected {
-    transform: rotate(0deg);
-  }
-  .country-stamp-frame.is-selected::after {
-    animation: none;
-    display: none;
   }
   .ring-postmark {
     transition: none;

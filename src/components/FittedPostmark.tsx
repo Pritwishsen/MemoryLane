@@ -89,7 +89,16 @@ export default function FittedPostmark({
   const { text, letterSpacing } = ringLabelLayout(label);
   const textRadius = sizePx * TEXT_RADIUS_RATIO;
   const discSize = sizePx * DISC_RATIO;
-  const d = `M${center},${center} m-${textRadius},0 a${textRadius},${textRadius} 0 1,1 ${textRadius * 2},0 a${textRadius},${textRadius} 0 1,1 -${textRadius * 2},0`;
+  // Path starts at the BOTTOM of the ring (not the left/west point) so that
+  // startOffset 50% below — the point diametrically opposite, the top — has
+  // the full circumference split evenly on both sides. A textPath can't
+  // render past either end of its path: starting at the west point with
+  // startOffset 25% (as this used to) left only 25% of the circumference
+  // behind the text-anchor="middle" label's start, so anything longer than
+  // that got its FRONT silently clipped (e.g. "Vatican City" → "tican
+  // City", "East Sussex" → "st Sussex" — matches SummaryMap.tsx's identical
+  // fix in ringPostmarkHtml()).
+  const d = `M${center},${center + textRadius} a${textRadius},${textRadius} 0 1,1 0,-${textRadius * 2} a${textRadius},${textRadius} 0 1,1 0,${textRadius * 2}`;
 
   return (
     <div className="relative shrink-0 rounded-full" style={frameStyle}>
@@ -110,7 +119,7 @@ export default function FittedPostmark({
             letterSpacing,
           }}
         >
-          <textPath href={`#${pathId}`} startOffset="25%" textAnchor="middle">
+          <textPath href={`#${pathId}`} startOffset="50%" textAnchor="middle">
             {text}
           </textPath>
         </text>
