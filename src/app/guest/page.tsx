@@ -62,7 +62,7 @@ export default async function GuestPage() {
           />
         </div>
 
-        <h1 className="font-display text-ink mt-4 text-[27px] font-semibold">
+        <h1 className="font-display text-ink mt-2 text-[27px] font-semibold">
           Your albums
         </h1>
         <p className="text-ink-soft mt-1 text-[13px]">
@@ -70,8 +70,8 @@ export default async function GuestPage() {
         </p>
 
         {pins.length > 0 && (
-          <div className="relative mt-5">
-            <MapLoader pins={pins} heightClassName="h-[212px]" initialZoomOffset={1} />
+          <div className="relative mt-4">
+            <MapLoader pins={pins} heightClassName="h-[340px]" initialZoomOffset={1} />
             <div
               className="absolute bottom-3 left-3 z-[1000] rounded-full px-[11px] py-[5px]"
               style={{
@@ -87,28 +87,26 @@ export default async function GuestPage() {
           </div>
         )}
 
-        <ul className="mt-6 flex flex-col gap-[10px]">
+        <ul className="mt-3 flex flex-col gap-[6px]">
           {albumRows.map(({ album, pageCount, countries }) => (
             <li key={album.id}>
               <Link
                 href={`/guest/${album.id}/summary`}
-                className="flex items-center gap-3 rounded-[10px] border bg-white px-[14px] py-[13px] transition"
+                className="flex items-center gap-[8px] rounded-[10px] border bg-white px-[10px] py-[6px] transition"
                 style={{
                   borderColor: "rgba(34,32,27,.12)",
                   boxShadow: "0 1px 2px rgba(34,32,27,.06)",
                 }}
               >
                 <AlbumFlagCluster countries={countries} />
-                <div className="min-w-0 flex-1">
-                  <p className="font-display text-ink text-[15px] font-semibold">
-                    {album.title}
-                  </p>
-                  <p className="font-meta-label text-ink-soft mt-0.5 truncate text-[9px]">
-                    {pageCount} {pageCount === 1 ? "PAGE" : "PAGES"}
+                <p className="font-display text-ink min-w-0 flex-1 truncate text-[13px] font-semibold">
+                  {album.title}
+                  <span className="font-meta-label text-ink-soft ml-[6px] font-normal text-[9px]">
+                    · {pageCount} {pageCount === 1 ? "PAGE" : "PAGES"}
                     {countries.length > 0 ? ` · ${countries.join(", ")}` : ""}
                     {albumMonth(album.createdAt) ? ` · ${albumMonth(album.createdAt)}` : ""}
-                  </p>
-                </div>
+                  </span>
+                </p>
                 <span
                   className="shrink-0 text-[15px]"
                   style={{ color: "var(--color-brass)", fontFamily: "var(--font-body)" }}

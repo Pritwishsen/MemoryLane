@@ -385,6 +385,25 @@ function ZoomAwarePins({
     moveend: () => forcePacketRecompute((n) => n + 1),
   });
 
+  // The very first packet layout (before the guest ever touches the map) is
+  // sometimes over-clustered compared to identical pins at the identical
+  // zoom after a pan — Leaflet's pixel origin from the initial synchronous
+  // fitBounds (plus the immediately-following initialZoomOffset setZoom
+  // above) doesn't get freshly recomputed until something calls
+  // _resetView, which a plain pan does as a side effect but the initial fit
+  // itself doesn't. `setView` to the map's own current center/zoom forces
+  // that recompute without moving anything, so guests see the same
+  // decluttered layout a manual pan would produce, without having to pan
+  // first. Runs once, after the zoom-offset effect above has settled on the
+  // final zoom.
+  const didResetPixelOrigin = useRef(false);
+  useEffect(() => {
+    if (didResetPixelOrigin.current) return;
+    didResetPixelOrigin.current = true;
+    map.setView(map.getCenter(), map.getZoom(), { animate: false });
+    forcePacketRecompute((n) => n + 1);
+  }, [map]);
+
   // The breadcrumb chip lives in the same top-left corner as Leaflet's
   // default zoom control. Rather than tuck the chip below the control (as
   // before), push the control itself down out of the chip's way — the chip
@@ -586,6 +605,17 @@ function ZoomAwarePins({
 
       {selectedPlace && (
         <div
+          ref={(el) => {
+            // The sheet renders inside Leaflet's own container, so a touch
+            // starting here would otherwise be claimed by Leaflet's pan/zoom
+            // handling before the browser's native scroll gets it — which is
+            // why the page list scrolls with a mouse wheel but not a touch
+            // drag. Stopping propagation keeps the gesture native.
+            if (el) {
+              L.DomEvent.disableClickPropagation(el);
+              L.DomEvent.disableScrollPropagation(el);
+            }
+          }}
           className="rounded-card absolute inset-x-0 bottom-0 z-[1000] bg-[var(--color-paper)] px-4 pb-[18px] pt-3.5"
           style={{
             borderTop: "1px solid rgba(34,32,27,.14)",

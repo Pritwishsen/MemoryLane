@@ -63,7 +63,7 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
   }));
 
   return (
-    <main className="flex-1 px-5 py-8 sm:px-8">
+    <main className="flex-1 px-5 py-6 sm:px-8">
       <div className="mx-auto w-full max-w-[480px]">
         <div className="flex items-center justify-between">
           <Link href="/guest" className="font-meta-label text-ink-soft hover:text-ink text-[9.5px]">
@@ -76,7 +76,7 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
           />
         </div>
 
-        <div className="mt-5">
+        <div className="mt-3">
           <h1 className="font-display text-ink text-[26px] font-semibold">{album.title}</h1>
           <p className="text-ink-soft mt-1 text-[13px]">
             {album.introText || "Here’s everywhere we went — tap a souvenir to relive it"}

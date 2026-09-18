@@ -26,17 +26,17 @@ export default function AlbumSummaryClient({ pins, rows }: AlbumSummaryClientPro
   return (
     <>
       {pins.length > 0 && (
-        <div className="mt-5">
+        <div className="mt-4">
           <MapLoader
             pins={pins}
-            heightClassName="h-[220px]"
+            heightClassName="h-[300px]"
             highlightedPlaceKey={highlighted}
             onPlaceHover={setHighlighted}
           />
         </div>
       )}
 
-      <div className="mt-8 flex items-center justify-between">
+      <div className="mt-5 flex items-center justify-between">
         <span className="font-meta-label text-ink-soft text-[9.5px]">Pages in order</span>
         <span className="font-meta-label text-[9.5px]" style={{ color: "var(--color-brass)" }}>
           {rows.length}
@@ -55,14 +55,14 @@ export default function AlbumSummaryClient({ pins, rows }: AlbumSummaryClientPro
                 href={`/p/${row.slug}`}
                 onMouseEnter={() => setHighlighted(placeKey)}
                 onMouseLeave={() => setHighlighted((k) => (k === placeKey ? null : k))}
-                className="flex items-center gap-[13px] rounded-lg px-1 py-[11px] transition-colors"
+                className="flex items-center gap-[10px] rounded-lg px-1 py-[8px] transition-colors"
                 style={{
                   borderBottom:
                     i < rows.length - 1 ? "1px solid rgba(34,32,27,.1)" : undefined,
                   background: highlighted === placeKey ? "rgba(31,78,74,.06)" : undefined,
                 }}
               >
-                <FittedPostmark label={row.label} idHint={row.id} />
+                <FittedPostmark label={row.label} idHint={row.id} sizePx={36} />
                 <span className="text-ink min-w-0 flex-1 truncate text-[14px]">{row.header}</span>
                 <span
                   className="shrink-0 text-[15px]"
