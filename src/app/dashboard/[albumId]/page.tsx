@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/authOptions";
 import { getOwnedAlbum, listPages } from "@/lib/albums";
+import { buildAlbumEditorData } from "@/lib/albumEditor";
 import AlbumEditorClient from "@/components/AlbumEditorClient";
 
 type PageProps = { params: Promise<{ albumId: string }> };
@@ -24,10 +25,16 @@ export default async function AlbumEditorPage({ params }: PageProps) {
     ...pages.filter((p) => !album.pageOrder.includes(p.id)),
   ];
 
+  const token = session.error ? undefined : session.accessToken;
+  const { stats, guests, accessChecked } = await buildAlbumEditorData(albumId, ordered, token);
+
   return (
     <AlbumEditorClient
       album={album}
       initialPages={ordered}
+      stats={stats}
+      initialGuests={guests}
+      accessChecked={accessChecked}
       userName={session.user?.name ?? null}
       userImage={session.user?.image ?? null}
       userEmail={session.user?.email ?? null}

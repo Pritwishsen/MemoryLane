@@ -4,7 +4,7 @@ import Link from "next/link";
 import { backLinkClass } from "@/components/ui/styles";
 import { authOptions } from "@/lib/authOptions";
 import { getAlbum, listPages } from "@/lib/albums";
-import { markInviteOpened } from "@/lib/invites";
+import { recordGuestView } from "@/lib/invites";
 import SignInScreen from "@/components/SignInScreen";
 import AccountBadge from "@/components/AccountBadge";
 import AlbumSummaryClient from "@/components/AlbumSummaryClient";
@@ -30,8 +30,8 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
   const album = await getAlbum(albumId);
   if (!album) notFound();
 
-  if (inviteId) {
-    await markInviteOpened(inviteId);
+  if (session.user?.email && album.ownerUid !== session.uid) {
+    await recordGuestView(albumId, session.user.email);
   }
 
   const pages = await listPages(albumId);

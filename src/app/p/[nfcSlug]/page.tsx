@@ -5,6 +5,7 @@ import { backLinkClass } from "@/components/ui/styles";
 import { authOptions } from "@/lib/authOptions";
 import { getPageBySlug, listPages } from "@/lib/albums";
 import { getUserById } from "@/lib/users";
+import { recordGuestView } from "@/lib/invites";
 import {
   listDriveImages,
   driveImageUrl,
@@ -58,6 +59,10 @@ export default async function TagPage({ params }: PageProps) {
   const result = await getPageBySlug(nfcSlug);
   if (!result) notFound();
   const { page, album } = result;
+
+  if (session.user?.email && album.ownerUid !== session.uid) {
+    await recordGuestView(album.id, session.user.email);
+  }
 
   // Sticky "next in this album" footer — GUEST_SCREENS.md's one new element
   // on this screen. getPageBySlug always resolves page+album together (or

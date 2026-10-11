@@ -35,13 +35,42 @@ export async function createInvite(
   return invite;
 }
 
-export async function markInviteOpened(inviteId: string): Promise<void> {
-  const ref = invitesCol().doc(inviteId);
-  const doc = await ref.get();
-  if (!doc.exists) return;
-  // Never regress "opened" back to "sent" — this only ever moves forward.
-  if ((doc.data() as Invite).status === "opened") return;
-  await ref.update({ status: "opened" });
+/** Marks every invite this account has for the album as viewed. Called on
+ *  any signed-in visit (summary or a tag page), whether the guest came in
+ *  through the invite link or an NFC tag. Two equality filters need no
+ *  composite index. No-op for accounts that weren't invited (e.g. owner). */
+export async function recordGuestView(albumId: string, email: string): Promise<void> {
+  const snap = await invitesCol()
+    .where("albumId", "==", albumId)
+    .where("guestEmail", "==", email.toLowerCase())
+    .get();
+  if (snap.empty) return;
+  const now = new Date().toISOString();
+  const batch = getAdminDb().batch();
+  snap.docs.forEach((d) => batch.update(d.ref, { status: "opened", lastViewedAt: now }));
+  await batch.commit();
+}
+
+/** All invite docs for one guest on one album (re-invites can leave more
+ *  than one). */
+export async function listInvitesForGuestOnAlbum(albumId: string, email: string): Promise<Invite[]> {
+  const snap = await invitesCol()
+    .where("albumId", "==", albumId)
+    .where("guestEmail", "==", email.toLowerCase())
+    .get();
+  return snap.docs.map((d) => d.data() as Invite);
+}
+
+export async function deleteInvites(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const batch = getAdminDb().batch();
+  ids.forEach((id) => batch.delete(invitesCol().doc(id)));
+  await batch.commit();
+}
+
+export async function listInvitesForAlbum(albumId: string): Promise<Invite[]> {
+  const snap = await invitesCol().where("albumId", "==", albumId).get();
+  return snap.docs.map((d) => d.data() as Invite);
 }
 
 /** Lets a signed-in guest discover which albums they've been invited to,

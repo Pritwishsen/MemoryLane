@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import Postmark from "./Postmark";
+import Image from "next/image";
+import { DISPLAY_MODE_NAME } from "@/lib/displayModes";
+import type { PageStats } from "@/lib/albumEditor";
 import type { Page } from "@/types/models";
 
 type SortablePageRowProps = {
@@ -12,6 +15,7 @@ type SortablePageRowProps = {
   albumId: string;
   onDeleted: (pageId: string) => void;
   onCopied: (message: string) => void;
+  stats?: PageStats;
   /** True for the page just added by "+ add page" — on a long page list, a
    *  new row appends off-screen at the bottom with nothing to show for it.
    *  This scrolls it into view and gives it a brief highlight so it's
@@ -24,8 +28,22 @@ export default function SortablePageRow({
   albumId,
   onDeleted,
   onCopied,
+  stats,
   isNew = false,
 }: SortablePageRowProps) {
+  const hasFolder = page.driveFolderIds.length > 0;
+  const photoCount = stats?.photoCount ?? null;
+  const problem = !hasFolder || photoCount === 0;
+  const stateText = !hasFolder
+    ? "Add a Drive folder to show photos"
+    : photoCount === 0
+      ? "No photos found in the folder"
+      : "Folder connected";
+  const metaParts = [
+    [page.place, page.country].filter(Boolean).join(", "),
+    !hasFolder ? "No folder yet" : photoCount === null ? null : `${photoCount} ${photoCount === 1 ? "photo" : "photos"}`,
+    hasFolder ? DISPLAY_MODE_NAME[page.displayMode] ?? page.displayMode : null,
+  ].filter(Boolean);
   const router = useRouter();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -75,20 +93,30 @@ export default function SortablePageRow({
         rootRef.current = node;
       }}
       style={style}
-      className={`border-ink/10 rounded-card overflow-hidden border bg-white transition-shadow duration-700 ${
+      className={`overflow-hidden rounded-xl border bg-white transition-shadow duration-700 ${
+        problem ? "border-stamp/35" : "border-ink/10"
+      } ${
         isNew ? "ring-teal ring-2 ring-offset-2" : ""
       }`}
     >
-      <div className="flex items-center gap-3 px-3 py-3">
+      <div className="flex items-center gap-3 px-3 py-2.5">
         <button
           type="button"
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder"
-          className="text-ink-soft cursor-grab touch-none active:cursor-grabbing"
+          className="text-ink-soft -ml-1 flex h-11 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-base active:cursor-grabbing"
         >
           ⠿
         </button>
+
+        <div
+          aria-hidden="true"
+          className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md"
+          style={{ background: "repeating-linear-gradient(135deg,#ded5c0 0 6px,#d4cab3 6px 12px)" }}
+        >
+          {stats?.thumbUrl && <Image src={stats.thumbUrl} alt="" fill sizes="56px" className="object-cover" />}
+        </div>
 
         {/*
           A native <button> can't contain another <button> (the copy-link
@@ -109,29 +137,34 @@ export default function SortablePageRow({
           className="min-w-0 flex-1 cursor-pointer text-left"
         >
           <div className="text-ink truncate font-medium">{page.header}</div>
-          {(page.place || page.country) && (
-            <div className="text-ink-soft truncate text-sm">
-              {[page.place, page.country].filter(Boolean).join(", ")}
-            </div>
+          {metaParts.length > 0 && (
+            <div className="text-ink-soft mt-px truncate text-[13px]">{metaParts.join(" · ")}</div>
           )}
-          <div className="font-meta-label text-ink-soft mt-1 flex items-center gap-2 text-[0.6rem]">
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs">
+            <span
+              aria-hidden="true"
+              className={`h-[7px] w-[7px] shrink-0 rounded-full ${problem ? "bg-stamp" : "bg-teal"}`}
+            />
+            <span className={`truncate ${problem ? "text-stamp" : "text-teal"}`}>{stateText}</span>
             {page.nfcSlug ? (
               <>
-                <span className="truncate">tag: {page.nfcSlug}</span>
+                <span className="text-ink/30">·</span>
+                <span className="font-meta text-ink-soft truncate text-[11px]">/p/{page.nfcSlug}</span>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleCopyLink();
                   }}
-                  title="Copy NFC link"
-                  className="shrink-0 normal-case"
+                  title="Copy page link"
+                  aria-label="Copy page link"
+                  className="-my-3 flex h-11 w-7 shrink-0 items-center justify-center"
                 >
                   <Postmark size="xs" rotate={-4} />
                 </button>
               </>
             ) : (
-              <span className="truncate normal-case">not tagged yet — open to save</span>
+              <span className="text-ink-soft truncate">· not saved yet</span>
             )}
           </div>
         </div>
@@ -159,7 +192,8 @@ export default function SortablePageRow({
             type="button"
             onClick={() => setConfirmingDelete(true)}
             title="Delete page"
-            className="text-ink-soft hover:text-stamp shrink-0"
+            aria-label="Delete page"
+            className="text-ink-soft hover:text-stamp flex h-11 w-9 shrink-0 items-center justify-center"
           >
             🗑
           </button>

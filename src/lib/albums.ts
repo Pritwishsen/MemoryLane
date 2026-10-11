@@ -235,5 +235,8 @@ export async function deleteAlbum(albumId: string): Promise<void> {
     if (nfcSlug) batch.delete(slugsCol().doc(nfcSlug));
   });
   batch.delete(albumsCol().doc(albumId));
+  // Invites used to be left behind as orphans pointing at a dead album.
+  const invitesSnap = await getAdminDb().collection("invites").where("albumId", "==", albumId).get();
+  invitesSnap.docs.forEach((doc) => batch.delete(doc.ref));
   await batch.commit();
 }

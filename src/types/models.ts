@@ -66,4 +66,10 @@ export type Invite = {
    *  never an access gate (Feature 6's Drive-sharing check is the only
    *  real gate). */
   status: "sent" | "opened";
+  /** Last time this guest's signed-in account opened the album summary or
+   *  any of its pages. Drives the host's "Viewed" chip. */
+  lastViewedAt?: string;
+  /** Drive permissions this app created when inviting, by folder id. Only
+   *  these are revoked on remove; shares the host made by hand are left. */
+  sharedPermissions?: Record<string, string>;
 };

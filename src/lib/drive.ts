@@ -185,3 +185,59 @@ export async function firstImageThumbnail(accessToken: string, folderIds: string
 export function driveImageUrl(thumbnailLink: string, size = 1600): string {
   return thumbnailLink.replace(/=s\d+$/, `=s${size}`);
 }
+
+type FolderImageFile = { id: string; parents?: string[]; thumbnailLink?: string; description?: string };
+
+/** Every image across the given folders, attributed to each folder it sits
+ *  in. Paginates and chunks the parents clause, so one call covers a whole
+ *  album's folders without the 1000-file cap. */
+export async function listImagesByFolder(
+  accessToken: string,
+  folderIds: string[]
+): Promise<Map<string, FolderImageFile[]>> {
+  const byFolder = new Map<string, FolderImageFile[]>(folderIds.map((id) => [id, []]));
+  const unique = [...new Set(folderIds)];
+  for (let i = 0; i < unique.length; i += 40) {
+    const chunk = unique.slice(i, i + 40);
+    const parentClause = chunk.map((id) => `'${id}' in parents`).join(" or ");
+    let pageToken: string | undefined;
+    do {
+      const data = await driveFetch(accessToken, "", {
+        q: `(${parentClause}) and mimeType contains 'image/' and trashed = false`,
+        fields: "nextPageToken,files(id,parents,thumbnailLink,description)",
+        orderBy: "name",
+        pageSize: "1000",
+        ...(pageToken ? { pageToken } : {}),
+      });
+      for (const f of (data.files ?? []) as FolderImageFile[]) {
+        for (const parent of f.parents ?? []) byFolder.get(parent)?.push(f);
+      }
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+  }
+  return byFolder;
+}
+
+export type DrivePermission = { type: string; role: string; emailAddress?: string };
+
+/** Who a file/folder is shared with. Needs the caller to be allowed to see
+ *  sharing (owner or editor); viewers get a 403, which callers should treat
+ *  as "unknown", not "not shared". */
+export async function listFolderPermissions(accessToken: string, folderId: string): Promise<DrivePermission[]> {
+  const data = await driveFetch(accessToken, `/${folderId}/permissions`, {
+    fields: "permissions(type,role,emailAddress)",
+    supportsAllDrives: "true",
+    pageSize: "100",
+  });
+  return data.permissions ?? [];
+}
+
+/** Whether a permission list grants `email` at least read access. Group and
+ *  domain shares can't be resolved to individual people, so they don't
+ *  count; an "anyone with the link" share does. */
+export function permissionsGrantEmail(perms: DrivePermission[], email: string): boolean {
+  const target = email.toLowerCase();
+  return perms.some(
+    (p) => p.type === "anyone" || (p.type === "user" && p.emailAddress?.toLowerCase() === target)
+  );
+}
