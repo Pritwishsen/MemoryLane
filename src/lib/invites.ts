@@ -51,3 +51,29 @@ export async function listInvitesForGuest(email: string): Promise<Invite[]> {
   const snap = await invitesCol().where("guestEmail", "==", email.toLowerCase()).get();
   return snap.docs.map((d) => d.data() as Invite);
 }
+
+/** Host side: every invite for a set of albums, grouped by album id.
+ *  Firestore's `in` filter takes at most 30 values, so ids are chunked. */
+export async function listInvitesForAlbums(albumIds: string[]): Promise<Map<string, Invite[]>> {
+  const byAlbum = new Map<string, Invite[]>(albumIds.map((id) => [id, []]));
+  for (let i = 0; i < albumIds.length; i += 30) {
+    const chunk = albumIds.slice(i, i + 30);
+    const snap = await invitesCol().where("albumId", "in", chunk).get();
+    for (const d of snap.docs) {
+      const invite = d.data() as Invite;
+      byAlbum.get(invite.albumId)?.push(invite);
+    }
+  }
+  return byAlbum;
+}
+
+/** One entry per guest email, keeping the most recent invite — re-inviting
+ *  the same person used to create a second doc. */
+export function dedupeInvitesByEmail(invites: Invite[]): Invite[] {
+  const latest = new Map<string, Invite>();
+  for (const inv of invites) {
+    const prev = latest.get(inv.guestEmail);
+    if (!prev || inv.invitedAt > prev.invitedAt) latest.set(inv.guestEmail, inv);
+  }
+  return [...latest.values()].sort((a, b) => a.invitedAt.localeCompare(b.invitedAt));
+}

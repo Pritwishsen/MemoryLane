@@ -165,6 +165,20 @@ export async function listDriveImages(
   return files;
 }
 
+/** Thumbnail of the first image (by name) across the given folders, or null
+ *  if they hold none. Used for album cover tiles; one cheap pageSize=1 call. */
+export async function firstImageThumbnail(accessToken: string, folderIds: string[]): Promise<string | null> {
+  if (folderIds.length === 0) return null;
+  const parentClause = folderIds.map((id) => `'${id}' in parents`).join(" or ");
+  const data = await driveFetch(accessToken, "", {
+    q: `(${parentClause}) and mimeType contains 'image/' and trashed = false`,
+    fields: "files(thumbnailLink)",
+    orderBy: "name",
+    pageSize: "1",
+  });
+  return data.files?.[0]?.thumbnailLink ?? null;
+}
+
 /** Drive's thumbnailLink ends in "=s220" (or similar) — swapping that suffix
  *  for a larger size is the standard trick to get a full-size viewable image
  *  without a second API call or downloading+re-hosting the file ourselves. */
