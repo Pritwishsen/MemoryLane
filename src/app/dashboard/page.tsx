@@ -13,7 +13,7 @@ export default async function DashboardPage() {
   // A failed token refresh leaves a stale accessToken on the session; skip
   // Drive entirely then rather than firing a dozen doomed requests.
   const token = session.error ? undefined : session.accessToken;
-  const cards = await buildAlbumCards(albums, token);
+  const cards = await buildAlbumCards(session.uid, albums, token);
 
   return (
     <DashboardClient

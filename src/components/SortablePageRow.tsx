@@ -16,6 +16,8 @@ type SortablePageRowProps = {
   onDeleted: (pageId: string) => void;
   onCopied: (message: string) => void;
   stats?: PageStats;
+  /** Drive stats still on their way: show a placeholder, not a verdict. */
+  statsLoading?: boolean;
   /** True for the page just added by "+ add page" — on a long page list, a
    *  new row appends off-screen at the bottom with nothing to show for it.
    *  This scrolls it into view and gives it a brief highlight so it's
@@ -29,6 +31,7 @@ export default function SortablePageRow({
   onDeleted,
   onCopied,
   stats,
+  statsLoading = false,
   isNew = false,
 }: SortablePageRowProps) {
   const hasFolder = page.driveFolderIds.length > 0;
@@ -41,7 +44,13 @@ export default function SortablePageRow({
       : "Folder connected";
   const metaParts = [
     [page.place, page.country].filter(Boolean).join(", "),
-    !hasFolder ? "No folder yet" : photoCount === null ? null : `${photoCount} ${photoCount === 1 ? "photo" : "photos"}`,
+    !hasFolder
+      ? "No folder yet"
+      : statsLoading
+        ? "Counting photos…"
+        : photoCount === null
+          ? null
+          : `${photoCount} ${photoCount === 1 ? "photo" : "photos"}`,
     hasFolder ? DISPLAY_MODE_NAME[page.displayMode] ?? page.displayMode : null,
   ].filter(Boolean);
   const router = useRouter();

@@ -1,4 +1,5 @@
-import { driveImageUrl, listFolderPermissions, listImagesByFolder, permissionsGrantEmail } from "./drive";
+import { indexFolder, listFolderPermissions, mapLimit, permissionsGrantEmail, type DrivePermission, type FolderIndex } from "./drive";
+import { cached, folderIndexKey, FOLDER_INDEX_TTL_MS, permissionsKey, PERMISSIONS_TTL_MS } from "./driveCache";
 import { dedupeInvitesByEmail, listInvitesForAlbum } from "./invites";
 import type { GuestStatus } from "@/components/ui/styles";
 import type { Invite, Page } from "@/types/models";
@@ -19,76 +20,100 @@ export type GuestRow = {
   missingFolderIds: string[];
 };
 
-function pageStats(page: Page, byFolder: Map<string, { id: string; thumbnailLink?: string; description?: string }[]>): PageStats {
+export type EditorDriveData = {
+  stats: Record<string, PageStats>;
+  guests: GuestRow[];
+  /** False when Drive sharing could not be read (no token, not owner). */
+  accessChecked: boolean;
+};
+
+/** Drive calls in flight at once for one album. */
+const DRIVE_CONCURRENCY = 8;
+
+function pageStats(page: Page, byFolder: Map<string, FolderIndex | null>): PageStats {
+  const indexes = page.driveFolderIds.map((id) => byFolder.get(id));
+  if (indexes.length > 0 && indexes.every((ix) => !ix)) return { photoCount: null, thumbUrl: null };
   const seen = new Set<string>();
-  let files = page.driveFolderIds.flatMap((id) => byFolder.get(id) ?? []).filter((f) => {
+  let files = indexes.flatMap((ix) => ix?.files ?? []).filter((f) => {
     if (seen.has(f.id)) return false;
     seen.add(f.id);
     return true;
   });
   if (page.imageFilter === "tagged" && page.tagKeyword.trim()) {
     const kw = page.tagKeyword.trim().toLowerCase();
-    files = files.filter((f) => f.description?.toLowerCase().includes(kw));
+    files = files.filter((f) => f.desc?.toLowerCase().includes(kw));
   }
-  const thumb = files.find((f) => f.thumbnailLink)?.thumbnailLink;
-  return { photoCount: files.length, thumbUrl: thumb ? driveImageUrl(thumb, 160) : null };
+  return { photoCount: files.length, thumbUrl: indexes.find((ix) => ix?.thumb)?.thumb ?? null };
 }
 
-function baseStatus(invites: Invite[]): { status: GuestStatus; lastViewedAt: string | null } {
-  const lastViewedAt =
-    invites
-      .map((i) => i.lastViewedAt)
-      .filter((v): v is string => Boolean(v))
-      .sort()
-      .pop() ?? null;
-  const opened = lastViewedAt !== null || invites.some((i) => i.status === "opened");
-  return { status: opened ? "viewed" : "invited", lastViewedAt };
-}
-
-/** Per-page photo stats and per-guest status for the album editor. All
- *  Drive calls use the host's token and fail soft: no token or a Drive
- *  error just means unknown counts and no "Needs Drive access" flags. */
-export async function buildAlbumEditorData(
-  albumId: string,
-  pages: Page[],
-  accessToken: string | undefined
-): Promise<{ stats: Record<string, PageStats>; guests: GuestRow[]; accessChecked: boolean }> {
-  const folderIds = [...new Set(pages.flatMap((p) => p.driveFolderIds))];
-  const allInvites = await listInvitesForAlbum(albumId);
-  const guestInvites = dedupeInvitesByEmail(allInvites);
-
-  const [byFolder, permsByFolder] = await Promise.all([
-    accessToken && folderIds.length > 0
-      ? listImagesByFolder(accessToken, folderIds).catch(() => null)
-      : Promise.resolve(null),
-    accessToken && guestInvites.length > 0
-      ? Promise.all(
-          folderIds.map(async (id) => [id, await listFolderPermissions(accessToken, id).catch(() => null)] as const)
-        )
-      : Promise.resolve([] as (readonly [string, null])[]),
-  ]);
-
-  const stats: Record<string, PageStats> = {};
-  for (const page of pages) {
-    stats[page.id] = byFolder ? pageStats(page, byFolder) : { photoCount: null, thumbUrl: null };
-  }
-
-  const guests: GuestRow[] = guestInvites.map((latest) => {
+function guestRows(allInvites: Invite[], permsByFolder: [string, DrivePermission[] | null][]): GuestRow[] {
+  return dedupeInvitesByEmail(allInvites).map((latest) => {
     const invites = allInvites.filter((i) => i.guestEmail === latest.guestEmail);
-    const { status, lastViewedAt } = baseStatus(invites);
+    const lastViewedAt =
+      invites
+        .map((i) => i.lastViewedAt)
+        .filter((v): v is string => Boolean(v))
+        .sort()
+        .pop() ?? null;
+    const opened = lastViewedAt !== null || invites.some((i) => i.status === "opened");
     const missingFolderIds = permsByFolder
       .filter(([, perms]) => perms !== null && !permissionsGrantEmail(perms, latest.guestEmail))
       .map(([id]) => id);
     return {
       email: latest.guestEmail,
-      status: missingFolderIds.length > 0 ? "needs-access" : status,
+      status: missingFolderIds.length > 0 ? "needs-access" : opened ? "viewed" : "invited",
       invitedAt: latest.invitedAt,
       lastViewedAt,
       missingFolderIds,
     };
   });
+}
 
-  // Only claim "everyone can see the photos" if sharing was actually read.
-  const accessChecked = permsByFolder.some(([, perms]) => perms !== null);
-  return { stats, guests, accessChecked };
+/** Firestore-only guest list (Viewed / Invited, no Drive check), so the
+ *  album editor can render immediately. */
+export async function buildGuestRowsQuick(albumId: string): Promise<GuestRow[]> {
+  return guestRows(await listInvitesForAlbum(albumId), []);
+}
+
+/** Per-page photo stats and per-guest Drive status, fetched after the
+ *  editor has rendered. Folders are indexed in parallel (ids only) and both
+ *  indexes and sharing lists are cached briefly per user. Everything fails
+ *  soft: a Drive error means unknown counts and no "Needs Drive access". */
+export async function buildEditorDriveData(
+  uid: string,
+  albumId: string,
+  pages: Page[],
+  accessToken: string | undefined
+): Promise<EditorDriveData> {
+  const folderIds = [...new Set(pages.flatMap((p) => p.driveFolderIds))];
+  const allInvites = await listInvitesForAlbum(albumId);
+  const hasGuests = allInvites.length > 0;
+
+  const [indexes, perms] = accessToken
+    ? await Promise.all([
+        mapLimit(folderIds, DRIVE_CONCURRENCY, (id) =>
+          cached(folderIndexKey(uid, id), FOLDER_INDEX_TTL_MS, () => indexFolder(accessToken, id)).catch(() => null)
+        ),
+        hasGuests
+          ? mapLimit(folderIds, DRIVE_CONCURRENCY, (id) =>
+              cached(permissionsKey(uid, id), PERMISSIONS_TTL_MS, () => listFolderPermissions(accessToken, id)).catch(
+                () => null
+              )
+            )
+          : Promise.resolve([] as (DrivePermission[] | null)[]),
+      ])
+    : [folderIds.map(() => null), [] as (DrivePermission[] | null)[]];
+
+  const byFolder = new Map(folderIds.map((id, i) => [id, indexes[i]]));
+  const permsByFolder = perms.map((p, i) => [folderIds[i], p] as [string, DrivePermission[] | null]);
+
+  const stats: Record<string, PageStats> = {};
+  for (const page of pages) stats[page.id] = pageStats(page, byFolder);
+
+  return {
+    stats,
+    guests: guestRows(allInvites, permsByFolder),
+    // Only claim "everyone can see the photos" if sharing was actually read.
+    accessChecked: permsByFolder.some(([, p]) => p !== null),
+  };
 }

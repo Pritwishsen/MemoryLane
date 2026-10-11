@@ -387,3 +387,44 @@ export async function folderStats(accessToken: string, folderIds: string[]): Pro
   await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
   return out;
 }
+
+export type FolderIndex = { files: { id: string; desc?: string }[]; thumb: string | null };
+
+/** Lightweight index of one folder: every image id (+ description, for the
+ *  keyword filter) and one thumbnail. Ids-only pages are far smaller than
+ *  full file records, and callers run folders in parallel instead of one
+ *  long sequential listing across a whole album. */
+export async function indexFolder(accessToken: string, folderId: string): Promise<FolderIndex> {
+  const q = `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`;
+  const thumbQuery = driveFetch(accessToken, "", { q, fields: "files(thumbnailLink)", orderBy: "name", pageSize: "1" });
+  const files: { id: string; desc?: string }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const data = await driveFetch(accessToken, "", {
+      q,
+      fields: "nextPageToken,files(id,description)",
+      pageSize: "1000",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    for (const f of (data.files ?? []) as { id: string; description?: string }[]) {
+      files.push(f.description ? { id: f.id, desc: f.description } : { id: f.id });
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  const link: string | undefined = (await thumbQuery).files?.[0]?.thumbnailLink;
+  return { files, thumb: link ? driveImageUrl(link, 160) : null };
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight. */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}

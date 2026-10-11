@@ -5,6 +5,7 @@ import { getOwnedAlbum, listPages } from "@/lib/albums";
 import { deleteInvites, listInvitesForGuestOnAlbum, newInviteId, saveInvite } from "@/lib/invites";
 import { sendInviteEmail } from "@/lib/email";
 import { revokePermissions, shareFolders, type ShareFailure } from "@/lib/sharing";
+import { invalidatePermissions } from "@/lib/driveCache";
 
 type RouteContext = { params: Promise<{ albumId: string }> };
 
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       );
     }
     ({ shared, failed } = await shareFolders(session.accessToken, folderIds, guestEmail));
+    invalidatePermissions(session.uid, folderIds);
   }
 
   const existing = await listInvitesForGuestOnAlbum(albumId, guestEmail);
@@ -118,6 +120,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
       );
     }
     unrevoked = await revokePermissions(session.accessToken, perms);
+    invalidatePermissions(session.uid, Object.keys(perms));
   }
 
   await deleteInvites(invites.map((i) => i.id));

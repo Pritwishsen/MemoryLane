@@ -20,16 +20,13 @@ import SortablePageRow from "./SortablePageRow";
 import InviteModal from "./InviteModal";
 import AccountBadge from "./AccountBadge";
 import AllGuestsDialog, { GuestListRow } from "./AllGuestsDialog";
-import type { GuestRow, PageStats } from "@/lib/albumEditor";
+import type { EditorDriveData, GuestRow, PageStats } from "@/lib/albumEditor";
 import type { Album, Page } from "@/types/models";
 
 type AlbumEditorClientProps = {
   album: Album;
   initialPages: Page[];
-  stats: Record<string, PageStats>;
   initialGuests: GuestRow[];
-  /** False when Drive sharing could not be read (no token, not owner). */
-  accessChecked: boolean;
   /** Host granted full Drive (invite can share folders). */
   canShare: boolean;
   userName: string | null;
@@ -51,9 +48,7 @@ function summaryOrder(guests: GuestRow[]): GuestRow[] {
 export default function AlbumEditorClient({
   album,
   initialPages,
-  stats,
   initialGuests,
-  accessChecked,
   canShare,
   userName,
   userImage,
@@ -78,10 +73,39 @@ export default function AlbumEditorClient({
   // A sent invite triggers router.refresh(); pick up the server's new list
   // (React's "adjust state when a prop changes" pattern, no effect needed).
   const [guestsSource, setGuestsSource] = useState(initialGuests);
+  // Photo counts, thumbnails and guest Drive access load after first paint
+  // (they need dozens of Drive calls); null until the first answer arrives.
+  const [stats, setStats] = useState<Record<string, PageStats>>({});
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [driveLoaded, setDriveLoaded] = useState(false);
+  const [driveVersion, setDriveVersion] = useState(0);
   if (guestsSource !== initialGuests) {
     setGuestsSource(initialGuests);
     setGuests(initialGuests);
+    setDriveVersion((v) => v + 1);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/albums/${album.id}/editor-data`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: EditorDriveData | null) => {
+        if (cancelled) return;
+        setDriveLoaded(true);
+        if (!data) return;
+        setStats(data.stats);
+        setAccessChecked(data.accessChecked);
+        // Keep local removals: only take statuses for guests still listed.
+        setGuests((prev) => {
+          const fresh = new Map(data.guests.map((g) => [g.email, g]));
+          return prev.map((g) => fresh.get(g.email) ?? g);
+        });
+      })
+      .catch(() => !cancelled && setDriveLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [album.id, driveVersion]);
 
   useEffect(() => {
     if (!newPageId) return;
@@ -253,7 +277,11 @@ export default function AlbumEditorClient({
                     </div>
                   ) : (
                     <div className="text-ink-soft mt-px text-xs">
-                      {accessChecked ? "Everyone can see the photos" : "Drive access not checked"}
+                      {!driveLoaded
+                        ? "Checking Drive access…"
+                        : accessChecked
+                          ? "Everyone can see the photos"
+                          : "Drive access not checked"}
                     </div>
                   )}
                 </div>
@@ -321,6 +349,7 @@ export default function AlbumEditorClient({
                     page={page}
                     albumId={album.id}
                     stats={stats[page.id]}
+                    statsLoading={!driveLoaded}
                     onDeleted={handlePageDeleted}
                     onCopied={setToast}
                     isNew={page.id === newPageId}

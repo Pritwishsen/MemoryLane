@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/authOptions";
 import { getOwnedAlbum, listPages } from "@/lib/albums";
-import { buildAlbumEditorData } from "@/lib/albumEditor";
+import { buildGuestRowsQuick } from "@/lib/albumEditor";
 import AlbumEditorClient from "@/components/AlbumEditorClient";
 
 type PageProps = { params: Promise<{ albumId: string }> };
@@ -25,16 +25,15 @@ export default async function AlbumEditorPage({ params }: PageProps) {
     ...pages.filter((p) => !album.pageOrder.includes(p.id)),
   ];
 
-  const token = session.error ? undefined : session.accessToken;
-  const { stats, guests, accessChecked } = await buildAlbumEditorData(albumId, ordered, token);
+  // Firestore only: the page renders at once and the editor fetches photo
+  // counts, thumbnails and guest Drive access afterwards (editor-data API).
+  const guests = await buildGuestRowsQuick(albumId);
 
   return (
     <AlbumEditorClient
       album={album}
       initialPages={ordered}
-      stats={stats}
       initialGuests={guests}
-      accessChecked={accessChecked}
       canShare={session.canShare && !session.error}
       userName={session.user?.name ?? null}
       userImage={session.user?.image ?? null}
