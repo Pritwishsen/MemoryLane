@@ -35,6 +35,7 @@ export default async function AlbumEditorPage({ params }: PageProps) {
       stats={stats}
       initialGuests={guests}
       accessChecked={accessChecked}
+      canShare={session.canShare && !session.error}
       userName={session.user?.name ?? null}
       userImage={session.user?.image ?? null}
       userEmail={session.user?.email ?? null}

@@ -16,6 +16,8 @@ declare module "next-auth" {
     uid: string;
     accessToken?: string;
     error?: "RefreshAccessTokenError" | "InsufficientScopeError";
+    /** Granted full Drive scope, so the app can share folders for them. */
+    canShare: boolean;
   }
 }
 
@@ -26,5 +28,6 @@ declare module "next-auth/jwt" {
     refreshToken?: string;
     accessTokenExpires?: number;
     error?: "RefreshAccessTokenError" | "InsufficientScopeError";
+    canShare?: boolean;
   }
 }

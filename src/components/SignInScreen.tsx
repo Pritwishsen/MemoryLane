@@ -40,7 +40,7 @@ export default function SignInScreen({ variant, callbackUrl }: SignInScreenProps
         <h1 className="font-display text-ink mt-2 text-2xl font-semibold">Sign in to continue</h1>
 
         <div className="mt-7">
-          <LoginButton callbackUrl={resolvedCallbackUrl} />
+          <LoginButton callbackUrl={resolvedCallbackUrl} host={variant === "host"} />
         </div>
 
         <p className="text-ink-soft mt-4 text-sm leading-relaxed">{HELPER_TEXT[variant]}</p>

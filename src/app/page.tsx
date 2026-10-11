@@ -83,7 +83,7 @@ export default async function LoginPage() {
               your trip.
             </p>
             <div className="mt-7 max-w-[340px]">
-              <LoginButton callbackUrl="/" />
+              <LoginButton callbackUrl="/" host />
             </div>
             <p className="text-ink-soft mt-3.5 max-w-[340px] text-sm leading-normal">
               Invited to an album? Sign in with the Google account your host invited.{" "}

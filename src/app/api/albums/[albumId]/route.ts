@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
+import { listInvitesForAlbum } from "@/lib/invites";
+import { revokePermissions } from "@/lib/sharing";
 import {
   deleteAlbum,
   getOwnedAlbum,
@@ -81,6 +83,14 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   const album = await getOwnedAlbum(albumId, session.uid);
   if (!album) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Best effort: revoke Drive shares this app made for the album's guests
+  // ("Guests lose access"). Never blocks the delete itself.
+  if (session.canShare && session.accessToken && !session.error) {
+    const invites = await listInvitesForAlbum(albumId);
+    const perms = invites.map((i) => i.sharedPermissions ?? {});
+    await Promise.all(perms.map((p) => revokePermissions(session.accessToken!, p))).catch(() => undefined);
   }
 
   await deleteAlbum(albumId);

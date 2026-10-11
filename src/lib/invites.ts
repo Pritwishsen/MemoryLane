@@ -14,27 +14,6 @@ export function newInviteId(): string {
   return invitesCol().doc().id;
 }
 
-export async function createInvite(
-  id: string,
-  albumId: string,
-  guestEmail: string,
-  note: string
-): Promise<Invite> {
-  const invite: Invite = {
-    id,
-    albumId,
-    // Lowercased so a guest's later sign-in email (Google normalizes these)
-    // reliably matches what the host typed into the invite form — see
-    // listInvitesForGuest, which is the whole reason this needs to line up.
-    guestEmail: guestEmail.toLowerCase(),
-    note,
-    invitedAt: new Date().toISOString(),
-    status: "sent",
-  };
-  await invitesCol().doc(id).set(invite);
-  return invite;
-}
-
 /** Marks every invite this account has for the album as viewed. Called on
  *  any signed-in visit (summary or a tag page), whether the guest came in
  *  through the invite link or an NFC tag. Two equality filters need no
@@ -105,4 +84,39 @@ export function dedupeInvitesByEmail(invites: Invite[]): Invite[] {
     if (!prev || inv.invitedAt > prev.invitedAt) latest.set(inv.guestEmail, inv);
   }
   return [...latest.values()].sort((a, b) => a.invitedAt.localeCompare(b.invitedAt));
+}
+
+/** Creates or refreshes the single invite for (album, email). Re-inviting
+ *  keeps the existing doc id (so earlier invite links still work), merges
+ *  app-created Drive permissions, keeps viewed state, and folds any older
+ *  duplicate docs into it. */
+export async function saveInvite(input: {
+  id: string;
+  albumId: string;
+  guestEmail: string;
+  note: string;
+  sharedPermissions: Record<string, string>;
+}): Promise<Invite> {
+  const email = input.guestEmail.toLowerCase();
+  const existing = await listInvitesForGuestOnAlbum(input.albumId, email);
+  const keep = existing.find((i) => i.id === input.id);
+  const mergedPerms = Object.assign({}, ...existing.map((i) => i.sharedPermissions ?? {}), input.sharedPermissions);
+  const lastViewedAt = existing.map((i) => i.lastViewedAt).filter(Boolean).sort().pop();
+
+  const invite: Invite = {
+    id: input.id,
+    albumId: input.albumId,
+    guestEmail: email,
+    note: input.note,
+    invitedAt: new Date().toISOString(),
+    status: existing.some((i) => i.status === "opened") ? "opened" : "sent",
+    sharedPermissions: mergedPerms,
+    ...(lastViewedAt ? { lastViewedAt } : {}),
+  };
+
+  const batch = getAdminDb().batch();
+  batch.set(invitesCol().doc(input.id), invite);
+  existing.filter((i) => i !== keep).forEach((i) => batch.delete(invitesCol().doc(i.id)));
+  await batch.commit();
+  return invite;
 }

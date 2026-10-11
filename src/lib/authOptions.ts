@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import GoogleProvider from "next-auth/providers/google";
 import { getAdminDb } from "./firebaseAdmin";
+import { DRIVE_FULL, DRIVE_READONLY } from "./scopes";
 
 /**
  * Google's access tokens expire in ~1hr. Without refreshing, a guest who
@@ -51,8 +52,9 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope:
-            "openid email profile https://www.googleapis.com/auth/drive.readonly",
+          // Default (guest) scope. Host entry points pass HOST_AUTH_PARAMS to
+          // signIn() to upgrade to full Drive for sharing.
+          scope: `openid email profile ${DRIVE_READONLY}`,
           access_type: "offline",
           prompt: "consent",
         },
@@ -80,9 +82,10 @@ export const authOptions: NextAuthOptions = {
         // later with Google's raw "insufficient authentication scopes"
         // error (see DriveApiError/isInsufficientScopeError in lib/drive.ts).
         const grantedScopes = account.scope?.split(" ") ?? [];
-        token.error = grantedScopes.includes("https://www.googleapis.com/auth/drive.readonly")
-          ? undefined
-          : "InsufficientScopeError";
+        // Full Drive implies read access, so either scope satisfies reads.
+        token.canShare = grantedScopes.includes(DRIVE_FULL);
+        token.error =
+          token.canShare || grantedScopes.includes(DRIVE_READONLY) ? undefined : "InsufficientScopeError";
 
         // Feature 2: create the users/{uid} doc on first login (spec-required).
         const db = getAdminDb();
@@ -115,6 +118,7 @@ export const authOptions: NextAuthOptions = {
       session.uid = token.uid;
       session.accessToken = token.accessToken;
       session.error = token.error;
+      session.canShare = token.canShare ?? false;
       return session;
     },
   },

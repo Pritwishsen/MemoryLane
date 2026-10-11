@@ -241,3 +241,52 @@ export function permissionsGrantEmail(perms: DrivePermission[], email: string): 
     (p) => p.type === "anyone" || (p.type === "user" && p.emailAddress?.toLowerCase() === target)
   );
 }
+
+async function driveSend(
+  accessToken: string,
+  method: "POST" | "DELETE",
+  path: string,
+  params: Record<string, string>,
+  body?: unknown
+) {
+  const url = new URL(`${FILES_ENDPOINT}${path}`);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  const res = await fetch(url.toString(), {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new DriveApiError(data?.error?.message ?? `Drive API error (${res.status})`, res.status);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+/** Shares a folder view-only with one person and returns the permission id.
+ *  Google's own share email is suppressed; MemoryLane sends the invite.
+ *  Requires the full Drive scope. */
+export async function createReaderPermission(accessToken: string, folderId: string, email: string): Promise<string> {
+  const data = await driveSend(
+    accessToken,
+    "POST",
+    `/${folderId}/permissions`,
+    { sendNotificationEmail: "false", supportsAllDrives: "true", fields: "id" },
+    { type: "user", role: "reader", emailAddress: email }
+  );
+  return data.id as string;
+}
+
+/** Removes one permission. A 404 (already removed, e.g. by hand in Drive)
+ *  counts as success. */
+export async function deletePermission(accessToken: string, folderId: string, permissionId: string): Promise<void> {
+  try {
+    await driveSend(accessToken, "DELETE", `/${folderId}/permissions/${permissionId}`, { supportsAllDrives: "true" });
+  } catch (err) {
+    if (err instanceof DriveApiError && err.status === 404) return;
+    throw err;
+  }
+}

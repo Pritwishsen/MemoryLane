@@ -30,6 +30,8 @@ type AlbumEditorClientProps = {
   initialGuests: GuestRow[];
   /** False when Drive sharing could not be read (no token, not owner). */
   accessChecked: boolean;
+  /** Host granted full Drive (invite can share folders). */
+  canShare: boolean;
   userName: string | null;
   userImage: string | null;
   userEmail: string | null;
@@ -52,6 +54,7 @@ export default function AlbumEditorClient({
   stats,
   initialGuests,
   accessChecked,
+  canShare,
   userName,
   userImage,
   userEmail,
@@ -141,12 +144,17 @@ export default function AlbumEditorClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ guestEmail: email }),
     });
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      setToast("Couldn't remove that guest — try again");
+      setToast(data?.error ?? "Couldn't remove that guest — try again");
       return;
     }
     setGuests((prev) => prev.filter((g) => g.email !== email));
-    setToast(`Removed ${email}`);
+    setToast(
+      data?.unrevoked
+        ? `Removed ${email}, but some Drive access couldn't be revoked — check sharing in Drive`
+        : `Removed ${email}`
+    );
   }
 
   async function handleDeleteAlbum() {
@@ -388,6 +396,15 @@ export default function AlbumEditorClient({
         <InviteModal
           albumId={album.id}
           albumTitle={title}
+          pages={pages}
+          stats={stats}
+          guests={guests}
+          canShare={canShare}
+          onRemove={handleRemoveGuest}
+          onViewAll={() => {
+            setInviting(false);
+            setShowingGuests(true);
+          }}
           onClose={() => setInviting(false)}
           onSent={(message) => {
             setToast(message);
