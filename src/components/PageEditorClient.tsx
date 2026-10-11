@@ -1,142 +1,155 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- small Drive thumbnails in the
+   folder card; next/image adds nothing at 44px. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { backLinkClass } from "@/components/ui/styles";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { backLinkClass, buttonClass } from "@/components/ui/styles";
 import Toast, { useToast } from "@/components/ui/Toast";
-import { signOut } from "next-auth/react";
+import Dialog from "@/components/ui/Dialog";
 import AccountBadge from "./AccountBadge";
+import DriveFolderPicker from "./DriveFolderPicker";
+import { DisplayModeDiagram, DisplayModePreview, PREVIEW_NOTE } from "./DisplayModeVisuals";
 import { countryToIso2 } from "@/lib/countries";
-import type { DisplayMode, ImageFilter, Page } from "@/types/models";
+import { parseDriveFolderId } from "@/lib/drive";
+import { HOST_AUTH_PARAMS } from "@/lib/scopes";
+import {
+  DISPLAY_MODES,
+  DISPLAY_MODE_HINT,
+  DISPLAY_MODE_NAME,
+  TIMED_MODES,
+  suggestedModes,
+} from "@/lib/displayModes";
+import type { DisplayMode, Page } from "@/types/models";
 
 type PageEditorClientProps = {
   albumId: string;
   page: Page;
   /** Read server-side from the request's Host header (see page.tsx) rather
-   *  than window.location client-side, so the NFC link's host renders
-   *  identically on the server and on hydration — no mismatch. */
+   *  than window.location client-side, so the page link renders identically
+   *  on the server and on hydration — no mismatch. */
   host: string;
   userName: string | null;
   userImage: string | null;
   userEmail: string | null;
-  /** Set server-side (see page.tsx) when the host's OWN token is already
-   *  known to be bad before any Drive call is even attempted — e.g. it
-   *  doesn't carry the drive.readonly scope (see authOptions.ts's jwt
-   *  callback). Shown as a banner up front rather than waiting for the
-   *  per-folder check below to fail with Google's raw error text. */
+  /** Set server-side when the host's own token is already known to be bad,
+   *  so the banner shows up front instead of after a Drive call fails. */
   sessionError?: "RefreshAccessTokenError" | "InsufficientScopeError";
 };
 
-type DriveCheckState =
-  | { status: "idle" }
-  | { status: "checking" }
-  | { status: "ok"; name: string }
-  | {
-      status: "error";
-      message: string;
+type DriveFile = { id: string; name: string; thumb: string | null; desc?: string };
+
+type FolderState =
+  | { id: string; status: "checking" }
+  | { id: string; status: "ok"; name: string; files: DriveFile[] | null }
+  | { id: string; status: "error"; message: string; reason?: "not-shared" | "insufficient-scope" | "unknown" };
+
+type PhotoMode = "all" | "sel";
+type SelMode = "rnd" | "tag";
+
+const STRIPES = "repeating-linear-gradient(135deg,#ded5c0 0 6px,#d4cab3 6px 12px)";
+const SECTIONS = ["Story", "Photos", "Display", "Link"] as const;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const inputClass =
+  "border-ink/15 text-ink mt-1.5 min-h-11 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none";
+
+/** Asks the server about each folder: reachable? name? which images? */
+async function fetchFolderStates(albumId: string, pageId: string, ids: string[]): Promise<FolderState[]> {
+  try {
+    const res = await fetch(
+      `/api/albums/${albumId}/pages/${pageId}/drive-check?folderIds=${encodeURIComponent(ids.join(","))}`
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? "Couldn't reach Google Drive");
+    const results: Array<{
+      folderId: string;
+      ok: boolean;
+      name?: string;
+      error?: string;
       reason?: "not-shared" | "insufficient-scope" | "unknown";
-    };
+      files?: DriveFile[];
+    }> = data.results ?? [];
+    return ids.map((id): FolderState => {
+      const r = results.find((x) => x.folderId === id);
+      if (!r) return { id, status: "error", message: "No answer from Google Drive" };
+      return r.ok
+        ? { id, status: "ok", name: r.name ?? "", files: r.files ?? null }
+        : {
+            id,
+            status: "error",
+            message:
+              r.reason === "not-shared"
+                ? "This folder isn't in your Drive, or isn't shared with you"
+                : (r.error ?? "Couldn't access this folder"),
+            reason: r.reason,
+          };
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Couldn't reach Google Drive";
+    return ids.map((id) => ({ id, status: "error" as const, message }));
+  }
+}
 
-// GUEST_SCREENS.md option 5a's tile picker copy, verbatim.
-const DISPLAY_MODE_META: { mode: DisplayMode; name: string; hint: string }[] = [
-  { mode: "grid", name: "Grid", hint: "Two columns, tap to enlarge" },
-  { mode: "slideshow", name: "Slideshow", hint: "Auto-advances, tap sides to steer" },
-  { mode: "contact", name: "Contact sheet", hint: "Swipe sideways · best over 15 photos" },
-  { mode: "stack", name: "Stack", hint: "One print at a time · best under 10" },
-  { mode: "scrapbook", name: "Scrapbook", hint: "Mixed sizes, taped down" },
-  { mode: "gallery", name: "Gallery", hint: "Big photo with a thumbnail rail" },
-];
+/** Applies fresh check results to the folder list, skipping any folder the
+ *  host removed while the check was in flight. */
+function mergeFolderStates(prev: FolderState[], fresh: FolderState[]): FolderState[] {
+  return prev.map((f) => fresh.find((x) => x.id === f.id) ?? f);
+}
 
-const DIAGRAM_BLOCK = "#C9C0A9";
-
-/** A 54px-tall static mini layout diagram per display mode — plain divs on
- *  --color-paper, per GUEST_SCREENS.md option 5a. Purely decorative, so
- *  approximate shapes rather than literal miniatures of the real components. */
-function DisplayModeDiagram({ mode }: { mode: DisplayMode }) {
-  const base = "h-[54px] w-full overflow-hidden rounded-[4px]";
-
-  if (mode === "grid") {
-    return (
-      <div className={`${base} grid grid-cols-2 gap-1 p-1.5`} style={{ background: "var(--color-paper)" }}>
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
-        ))}
-      </div>
-    );
-  }
-  if (mode === "slideshow") {
-    return (
-      <div
-        className={`${base} flex flex-col items-center justify-center gap-1.5`}
-        style={{ background: "var(--color-paper)" }}
-      >
-        <span className="h-8 w-10/12 rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
-        <span className="flex gap-1">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="h-1 w-1 rounded-full"
-              style={{ background: i === 0 ? "var(--color-teal)" : DIAGRAM_BLOCK }}
-            />
-          ))}
-        </span>
-      </div>
-    );
-  }
-  if (mode === "contact") {
-    return (
-      <div className={`${base} flex items-center gap-1 px-1.5`} style={{ background: "var(--color-ink)" }}>
-        {[0, 1, 2, 3].map((i) => (
-          <span
-            key={i}
-            className="h-8 w-3 shrink-0 rounded-[1px]"
-            style={{ background: "rgba(243,237,228,.5)" }}
-          />
-        ))}
-      </div>
-    );
-  }
-  if (mode === "stack") {
-    return (
-      <div className={`${base} relative`} style={{ background: "var(--color-paper)" }}>
-        <span
-          className="absolute rounded-[2px]"
-          style={{ left: 22, top: 10, width: 22, height: 34, background: "#E2DAC6", transform: "rotate(6deg)" }}
-        />
-        <span
-          className="absolute rounded-[2px]"
-          style={{ left: 18, top: 8, width: 22, height: 34, background: "#D8CFB8", transform: "rotate(-3deg)" }}
-        />
-        <span
-          className="absolute rounded-[2px]"
-          style={{ left: 16, top: 6, width: 22, height: 34, background: DIAGRAM_BLOCK }}
-        />
-      </div>
-    );
-  }
-  if (mode === "scrapbook") {
-    return (
-      <div className={`${base} grid grid-cols-2 gap-1 p-1.5`} style={{ background: "var(--color-paper)" }}>
-        <span className="col-span-2 h-3 rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
-        <span className="h-5 rounded-[2px]" style={{ background: DIAGRAM_BLOCK, transform: "rotate(-2deg)" }} />
-        <span className="h-5 rounded-[2px]" style={{ background: DIAGRAM_BLOCK, transform: "rotate(2deg)" }} />
-      </div>
-    );
-  }
-  // gallery
+function SectionCard({
+  id,
+  n,
+  title,
+  sub,
+  children,
+}: {
+  id: string;
+  n: string;
+  title: string;
+  sub: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className={`${base} flex flex-col gap-1 p-1.5`} style={{ background: "var(--color-paper)" }}>
-      <span className="h-8 w-full rounded-[2px]" style={{ background: DIAGRAM_BLOCK }} />
-      <span className="flex gap-1">
-        {[0, 1, 2, 3].map((i) => (
-          <span
-            key={i}
-            className="h-2 w-2 rounded-[1px]"
-            style={{ background: i === 0 ? "var(--color-brass)" : DIAGRAM_BLOCK }}
-          />
-        ))}
-      </span>
-    </div>
+    <section
+      id={`pe-${id}`}
+      className="border-ink/10 flex scroll-mt-4 flex-col gap-5 rounded-xl border bg-white/55 p-5"
+    >
+      <div className="flex flex-wrap items-baseline gap-x-2.5">
+        <span className="font-meta text-gold text-xs tracking-[0.06em]">{n}</span>
+        <h2 className="font-display text-ink text-xl font-semibold">{title}</h2>
+        <span className="text-ink-soft text-[13px]">{sub}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Radio({
+  checked,
+  onSelect,
+  children,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      onClick={onSelect}
+      className="flex min-h-11 items-center gap-2.5 text-left"
+    >
+      <span
+        aria-hidden="true"
+        className="h-4 w-4 shrink-0 rounded-full bg-white"
+        style={{ border: checked ? "5px solid var(--color-teal)" : "1.5px solid rgba(34,32,27,.4)" }}
+      />
+      <span className="text-ink text-sm">{children}</span>
+    </button>
   );
 }
 
@@ -149,103 +162,173 @@ export default function PageEditorClient({
   userEmail,
   sessionError,
 }: PageEditorClientProps) {
+  const router = useRouter();
+  const albumHref = `/dashboard/${albumId}`;
+
   const [header, setHeader] = useState(page.header);
   const [bodyText, setBodyText] = useState(page.bodyText);
   const [place, setPlace] = useState(page.place ?? "");
   const [country, setCountry] = useState(page.country ?? "");
-  // Reflects the last SAVED place/country, not whatever's currently typed —
-  // geocoding only runs server-side on save (Nominatim's usage policy asks
-  // callers not to hammer it on every keystroke), so this can only ever be
-  // as fresh as the last save. Country-recognition below has no such cost
-  // and can react live to typing instead.
+  // lat/lng reflect the last SAVED place/country: geocoding only runs
+  // server-side on save (Nominatim's usage policy asks callers not to hit it
+  // per keystroke). geocodedPlace/Country remember which text produced them.
   const [lat, setLat] = useState(page.lat);
   const [lng, setLng] = useState(page.lng);
-  // The exact place/country text that produced the lat/lng above, so the
-  // "couldn't place it" warning only shows while the fields still match what
-  // was actually geocoded — not the instant a fresh/edited page has null
-  // lat/lng before any save has even been attempted.
   const [geocodedPlace, setGeocodedPlace] = useState(page.place ?? "");
   const [geocodedCountry, setGeocodedCountry] = useState(page.country ?? "");
-  const initialFolders = page.driveFolderIds?.length ? page.driveFolderIds : [""];
-  const [driveFolderInputs, setDriveFolderInputs] = useState<string[]>(initialFolders);
-  const [imageFilter, setImageFilter] = useState<ImageFilter>(page.imageFilter);
+
+  const [folders, setFolders] = useState<FolderState[]>(() =>
+    (page.driveFolderIds ?? []).map((id) => ({ id, status: "checking" as const }))
+  );
+  const [photoMode, setPhotoMode] = useState<PhotoMode>(
+    page.imageFilter === "tagged" || page.randomizeAll ? "sel" : "all"
+  );
+  const [selMode, setSelMode] = useState<SelMode>(page.imageFilter === "tagged" ? "tag" : "rnd");
   const [tagKeyword, setTagKeyword] = useState(page.tagKeyword);
-  const [randomizeAll, setRandomizeAll] = useState(page.randomizeAll ?? false);
   const [randomLimit, setRandomLimit] = useState(page.randomLimit ?? 20);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(page.displayMode);
-  const [slideshowIntervalSec, setSlideshowIntervalSec] = useState(
-    page.slideshowIntervalSec ?? 4
-  );
+  const [intervalSec, setIntervalSec] = useState(page.slideshowIntervalSec ?? 4);
 
   const [nfcSlug, setNfcSlug] = useState(page.nfcSlug);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useToast();
-  const [driveChecks, setDriveChecks] = useState<DriveCheckState[]>(
-    initialFolders.map((f) => (f ? { status: "checking" } : { status: "idle" }))
-  );
+  const [picker, setPicker] = useState<null | { mode: "add" } | { mode: "change"; index: number }>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteValue, setPasteValue] = useState("");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
+  // What the server has. Used to detect unsaved changes for Cancel.
+  const snapshot = (v: {
+    header: string;
+    bodyText: string;
+    place: string;
+    country: string;
+    folderIds: string[];
+    imageFilter: string;
+    tagKeyword: string;
+    randomizeAll: boolean;
+    randomLimit: number;
+    displayMode: string;
+    intervalSec: number;
+  }) => JSON.stringify(v);
+  const fields = {
+    header,
+    bodyText,
+    place,
+    country,
+    folderIds: folders.map((f) => f.id),
+    imageFilter: photoMode === "sel" && selMode === "tag" ? "tagged" : "all",
+    tagKeyword,
+    randomizeAll: photoMode === "sel" && selMode === "rnd",
+    randomLimit,
+    displayMode,
+    intervalSec,
+  };
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    snapshot({
+      header: page.header,
+      bodyText: page.bodyText,
+      place: page.place ?? "",
+      country: page.country ?? "",
+      folderIds: page.driveFolderIds ?? [],
+      imageFilter: page.imageFilter === "tagged" ? "tagged" : "all",
+      tagKeyword: page.tagKeyword,
+      randomizeAll: page.imageFilter !== "tagged" && !!page.randomizeAll,
+      randomLimit: page.randomLimit ?? 20,
+      displayMode: page.displayMode,
+      intervalSec: page.slideshowIntervalSec ?? 4,
+    })
+  );
+  const dirty = snapshot(fields) !== savedSnapshot;
 
   useEffect(() => {
-    if (page.driveFolderIds?.length) {
-      checkFolders(page.driveFolderIds);
+    // Check the folders this page already had saved, once, on open.
+    const ids = page.driveFolderIds ?? [];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    fetchFolderStates(albumId, page.id, ids).then((states) => {
+      if (!cancelled) setFolders((prev) => mergeFolderStates(prev, states));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [albumId, page.id, page.driveFolderIds]);
+
+  function checkFolders(ids: string[]) {
+    fetchFolderStates(albumId, page.id, ids).then((states) => setFolders((prev) => mergeFolderStates(prev, states)));
+  }
+
+  function addFolder(id: string, replaceIndex?: number) {
+    if (folders.some((f, i) => f.id === id && i !== replaceIndex)) {
+      setToast("That folder is already on this page");
+      return;
     }
-    // Only run once on mount for the folders this page already had saved.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const next: FolderState = { id, status: "checking" };
+    setFolders((prev) =>
+      replaceIndex === undefined ? [...prev, next] : prev.map((f, i) => (i === replaceIndex ? next : f))
+    );
+    checkFolders([id]);
+  }
 
-  async function checkFolders(folderIds: string[]) {
-    if (folderIds.length === 0) return;
-    setDriveChecks(folderIds.map(() => ({ status: "checking" })));
-    try {
-      const res = await fetch(
-        `/api/albums/${albumId}/pages/${page.id}/drive-check?folderIds=${encodeURIComponent(folderIds.join(","))}`
-      );
-      const data = await res.json();
-      const results: Array<{
-        folderId: string;
-        ok: boolean;
-        name?: string;
-        error?: string;
-        reason?: "not-shared" | "insufficient-scope" | "unknown";
-      }> = data.results ?? [];
-      setDriveChecks(
-        folderIds.map((id) => {
-          const match = results.find((r) => r.folderId === id);
-          if (!match) return { status: "error", message: "No result" };
-          return match.ok
-            ? { status: "ok", name: match.name ?? "" }
-            : {
-                status: "error",
-                message: match.error ?? "Couldn't access this folder",
-                reason: match.reason,
-              };
-        })
-      );
-    } catch {
-      setDriveChecks(
-        folderIds.map(() => ({ status: "error", message: "Couldn't reach Google Drive" }))
-      );
+  function handlePaste() {
+    const id = parseDriveFolderId(pasteValue);
+    if (!id) {
+      setPasteError("That doesn't look like a Drive folder link");
+      return;
     }
+    addFolder(id);
+    setPasteValue("");
+    setPasteError(null);
+    setPasteOpen(false);
   }
 
-  function updateFolderInput(index: number, value: string) {
-    setDriveFolderInputs((prev) => prev.map((v, i) => (i === index ? value : v)));
-  }
+  // Photo maths for counts, suggestions and preview: unknown (null) while
+  // any folder is still being checked or Drive didn't return its files.
+  // Folders that errored contribute nothing.
+  const allFiles = useMemo(() => {
+    if (folders.some((f) => f.status === "checking" || (f.status === "ok" && f.files === null))) return null;
+    const seen = new Set<string>();
+    const out: DriveFile[] = [];
+    for (const f of folders) {
+      if (f.status !== "ok" || !f.files) continue;
+      for (const file of f.files) {
+        if (seen.has(file.id)) continue;
+        seen.add(file.id);
+        out.push(file);
+      }
+    }
+    return out;
+  }, [folders]);
 
-  function addFolderRow() {
-    setDriveFolderInputs((prev) => [...prev, ""]);
-    setDriveChecks((prev) => [...prev, { status: "idle" }]);
-  }
+  const keyword = tagKeyword.trim().toLowerCase();
+  const shownFiles = useMemo(() => {
+    if (!allFiles) return null;
+    if (photoMode === "sel" && selMode === "tag" && keyword) {
+      return allFiles.filter((f) => f.desc?.toLowerCase().includes(keyword));
+    }
+    return allFiles;
+  }, [allFiles, photoMode, selMode, keyword]);
+  const totalCount = folders.length === 0 ? null : (allFiles?.length ?? null);
+  const effectiveCount =
+    shownFiles === null
+      ? null
+      : photoMode === "sel" && selMode === "rnd"
+        ? Math.min(randomLimit, shownFiles.length)
+        : shownFiles.length;
+  const suggestions = effectiveCount === null ? [] : suggestedModes(effectiveCount);
+  const previewThumbs = (shownFiles ?? []).map((f) => f.thumb).filter((x): x is string => Boolean(x)).slice(0, 8);
 
-  function removeFolderRow(index: number) {
-    setDriveFolderInputs((prev) => prev.filter((_, i) => i !== index));
-    setDriveChecks((prev) => prev.filter((_, i) => i !== index));
-  }
+  // Live — pure string lookup, no network call.
+  const flagUnrecognized = country.trim() !== "" && !countryToIso2(country);
+  const pinMissing =
+    (geocodedPlace.trim() !== "" || geocodedCountry.trim() !== "") &&
+    (lat == null || lng == null) &&
+    place === geocodedPlace &&
+    country === geocodedCountry;
 
   async function handleSave() {
     setSaving(true);
-    const placeAtSave = place;
-    const countryAtSave = country;
     try {
       const res = await fetch(`/api/albums/${albumId}/pages/${page.id}`, {
         method: "PATCH",
@@ -255,34 +338,35 @@ export default function PageEditorClient({
           bodyText,
           place,
           country,
-          driveFolderInputs,
-          imageFilter,
+          driveFolderInputs: fields.folderIds,
+          imageFilter: fields.imageFilter,
           tagKeyword,
-          randomizeAll,
+          randomizeAll: fields.randomizeAll,
           randomLimit,
           displayMode,
-          slideshowIntervalSec,
+          slideshowIntervalSec: intervalSec,
         }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "Failed to save");
       }
-      const { page: updated } = await res.json();
+      const { page: updated } = (await res.json()) as { page: Page };
       setHeader(updated.header);
       setNfcSlug(updated.nfcSlug);
       setLat(updated.lat);
       setLng(updated.lng);
-      setGeocodedPlace(placeAtSave);
-      setGeocodedCountry(countryAtSave);
-      setToast("Saved");
+      setGeocodedPlace(place);
+      setGeocodedCountry(country);
+      setSavedSnapshot(snapshot({ ...fields, header: updated.header }));
 
-      const savedFolders: string[] = updated.driveFolderIds ?? [];
-      setDriveFolderInputs(savedFolders.length > 0 ? savedFolders : [""]);
-      if (savedFolders.length > 0) {
-        checkFolders(savedFolders);
+      const unplaced = (place.trim() || country.trim()) && (updated.lat == null || updated.lng == null);
+      if (unplaced) {
+        // Stay so the host sees the "couldn't place it on the map" warning.
+        setToast("Saved — but this place isn't on the map yet");
       } else {
-        setDriveChecks([{ status: "idle" }]);
+        router.push(albumHref);
+        router.refresh();
       }
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Failed to save");
@@ -291,331 +375,458 @@ export default function PageEditorClient({
     }
   }
 
-  // Live — pure string lookup, no network call, safe to recompute on every keystroke.
-  const flagUnrecognized = country.trim() !== "" && !countryToIso2(country);
-  // Reflects the saved page (see the lat/lng state comment above): true once a place
-  // or country has actually been saved and Nominatim still couldn't place it. Only
-  // shown while the fields still match what was saved — editing them again hides it
-  // until the next save, rather than warning about text that was never geocoded.
-  const pinMissing =
-    (geocodedPlace.trim() !== "" || geocodedCountry.trim() !== "") &&
-    (lat == null || lng == null) &&
-    place === geocodedPlace &&
-    country === geocodedCountry;
+  function handleCancel() {
+    if (dirty) setConfirmDiscard(true);
+    else router.push(albumHref);
+  }
+
+  function scrollTo(section: string) {
+    document.getElementById(`pe-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function handleCopyLink() {
-    const url = `${window.location.origin}/p/${nfcSlug}`;
     navigator.clipboard
-      .writeText(url)
+      .writeText(`${window.location.origin}/p/${nfcSlug}`)
       .then(() => setToast("Link copied — write it to your NFC tag"))
       .catch(() => setToast("Couldn't copy the link"));
   }
 
+  const reconnect = () => signIn("google", { callbackUrl: window.location.href }, HOST_AUTH_PARAMS);
+
   return (
-    <main className="flex-1 px-5 py-6 sm:px-8">
-      <div className="mx-auto w-full max-w-[720px]">
-        <div className="flex items-center justify-between">
-          <Link
-            href={`/dashboard/${albumId}`}
-            className={backLinkClass}
-          >
-            ← Back to album
-          </Link>
-          <AccountBadge name={userName} image={userImage} email={userEmail} />
-        </div>
-
-        {sessionError && (
-          <div className="border-stamp/30 bg-stamp/5 mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-            <p className="text-stamp text-xs">
-              {sessionError === "InsufficientScopeError"
-                ? "Your Google sign-in doesn't have Drive access yet — reconnect to add or check folders."
-                : "Your Google sign-in needs refreshing to keep working."}
-            </p>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/create" })}
-              className="text-stamp shrink-0 text-xs font-medium underline"
-            >
-              Sign out &amp; reconnect
+    <main className="flex flex-1 flex-col">
+      <div className="flex-1 px-5 pb-8 pt-6 sm:px-8">
+        <div className="mx-auto w-full max-w-[720px]">
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={handleCancel} className={backLinkClass}>
+              ← Back to album
             </button>
-          </div>
-        )}
-
-        <div className="mt-6 flex flex-col gap-6">
-          <label className="block">
-            <span className="text-ink-soft text-xs font-medium">Header</span>
-            <input
-              value={header}
-              onChange={(e) => setHeader(e.target.value)}
-              className="border-ink/15 text-ink font-display mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-lg font-semibold focus:outline-none"
-              suppressHydrationWarning
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-ink-soft text-xs font-medium">Story</span>
-            <textarea
-              value={bodyText}
-              onChange={(e) => setBodyText(e.target.value)}
-              rows={4}
-              className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none"
-              suppressHydrationWarning
-            />
-          </label>
-
-          <div className="flex gap-4">
-            <label className="block flex-1">
-              <span className="text-ink-soft text-xs font-medium">Place</span>
-              <input
-                value={place}
-                onChange={(e) => setPlace(e.target.value)}
-                placeholder="Jaipur"
-                className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
-                suppressHydrationWarning
-              />
-            </label>
-            <label className="block flex-1">
-              <span className="text-ink-soft text-xs font-medium">Country</span>
-              <input
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                placeholder="India"
-                className="border-ink/15 text-ink mt-1.5 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
-                suppressHydrationWarning
-              />
-            </label>
+            <AccountBadge name={userName} image={userImage} email={userEmail} />
           </div>
 
-          {(pinMissing || flagUnrecognized) && (
-            <p className="text-stamp bg-stamp/5 rounded-lg p-3 text-xs leading-relaxed">
-              {pinMissing && (
-                <>
-                  ⚠ We couldn&rsquo;t place &ldquo;{[place, country].filter(Boolean).join(", ")}
-                  &rdquo; on the map, so this page won&rsquo;t get a pin yet — try being more
-                  specific (a nearby city, or the full country name).
-                </>
-              )}
-              {pinMissing && flagUnrecognized && <br />}
-              {flagUnrecognized && (
-                <>
-                  ⚠ &ldquo;{country}&rdquo; isn&rsquo;t a country name we recognize, so no flag
-                  will show for it{pinMissing ? "" : " on the map"}.
-                </>
-              )}
-            </p>
-          )}
+          <h1 className="font-display text-ink mt-4 text-[26px] font-semibold">Edit page</h1>
 
-          <div className="block">
-            <span className="text-ink-soft text-xs font-medium">
-              Google Drive folders
-            </span>
-            <div className="mt-1.5 flex flex-col gap-3">
-              {driveFolderInputs.map((input, i) => {
-                const check: DriveCheckState = driveChecks[i] ?? { status: "idle" };
-                return (
-                  <div key={i}>
-                    <div className="flex gap-2">
-                      <input
-                        value={input}
-                        onChange={(e) => updateFolderInput(i, e.target.value)}
-                        placeholder="Paste a Drive folder link"
-                        className="border-ink/15 text-ink w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none"
-                        suppressHydrationWarning
-                      />
-                      {driveFolderInputs.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeFolderRow(i)}
-                          title="Remove folder"
-                          className="text-ink-soft hover:text-stamp shrink-0 px-1"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                    {check.status === "checking" && (
-                      <p className="text-ink-soft mt-1 text-xs">Checking access…</p>
-                    )}
-                    {check.status === "ok" && (
-                      <p className="text-teal mt-1 text-xs">✓ Connected to “{check.name}”</p>
-                    )}
-                    {check.status === "error" && (
-                      <p className="text-stamp mt-1 text-xs">
-                        {check.message}
-                        {check.reason === "insufficient-scope" && (
-                          <>
-                            {" "}
-                            <button
-                              type="button"
-                              onClick={() => signOut({ callbackUrl: "/create" })}
-                              className="underline"
-                            >
-                              Sign out &amp; reconnect
-                            </button>
-                          </>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-              <button
-                type="button"
-                onClick={addFolderRow}
-                className="text-teal self-start text-sm font-medium"
-              >
-                + Add another folder
+          {sessionError && (
+            <div className="border-stamp/30 bg-stamp/5 mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+              <p className="text-stamp text-xs">
+                {sessionError === "InsufficientScopeError"
+                  ? "Your Google sign-in doesn't have Drive access yet — reconnect to add or check folders."
+                  : "Your Google sign-in needs refreshing to keep working."}
+              </p>
+              <button type="button" onClick={reconnect} className="text-stamp min-h-11 shrink-0 text-xs font-medium underline">
+                Reconnect
               </button>
             </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {SECTIONS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => scrollTo(s)}
+                className="border-ink/15 text-teal min-h-9 rounded-full border bg-white px-4 text-[13px] font-medium"
+              >
+                {s}
+              </button>
+            ))}
           </div>
 
-          <div>
-            <span className="text-ink-soft text-xs font-medium">Show images</span>
-            <div className="mt-2 flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm">
+          <div className="mt-5 flex flex-col gap-5">
+            <SectionCard id="Story" n="01" title="Story" sub="What guests read">
+              <label className="block">
+                <span className="text-ink-soft text-xs font-medium">Header</span>
                 <input
-                  type="radio"
-                  name="imageFilter"
-                  checked={imageFilter === "all"}
-                  onChange={() => setImageFilter("all")}
+                  value={header}
+                  onChange={(e) => setHeader(e.target.value)}
+                  className={`${inputClass} font-display text-lg font-semibold`}
                   suppressHydrationWarning
                 />
-                All photos in folder
               </label>
-              {imageFilter === "all" && (
-                <div className="ml-6 flex flex-col gap-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={randomizeAll}
-                      onChange={(e) => setRandomizeAll(e.target.checked)}
-                      suppressHydrationWarning
-                    />
-                    Randomize — pick a fresh random set each time, limit:
+              <label className="block">
+                <span className="text-ink-soft text-xs font-medium">Story</span>
+                <textarea
+                  value={bodyText}
+                  onChange={(e) => setBodyText(e.target.value)}
+                  rows={4}
+                  className={`${inputClass} min-h-24 leading-relaxed`}
+                  suppressHydrationWarning
+                />
+              </label>
+              <div className="flex gap-4">
+                <label className="block min-w-0 flex-1">
+                  <span className="text-ink-soft text-xs font-medium">Place</span>
+                  <input
+                    value={place}
+                    onChange={(e) => setPlace(e.target.value)}
+                    placeholder="Jaipur"
+                    className={inputClass}
+                    suppressHydrationWarning
+                  />
+                </label>
+                <label className="block min-w-0 flex-1">
+                  <span className="text-ink-soft text-xs font-medium">Country</span>
+                  <input
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="India"
+                    className={inputClass}
+                    suppressHydrationWarning
+                  />
+                </label>
+              </div>
+              {(pinMissing || flagUnrecognized) && (
+                <p className="text-stamp bg-stamp/5 rounded-lg p-3 text-xs leading-relaxed">
+                  {pinMissing && (
+                    <>
+                      ⚠ We couldn&rsquo;t place &ldquo;{[place, country].filter(Boolean).join(", ")}&rdquo; on the
+                      map, so this page won&rsquo;t get a pin yet — try being more specific (a nearby city, or the
+                      full country name).
+                    </>
+                  )}
+                  {pinMissing && flagUnrecognized && <br />}
+                  {flagUnrecognized && (
+                    <>
+                      ⚠ &ldquo;{country}&rdquo; isn&rsquo;t a country name we recognize, so no flag will show for it
+                      {pinMissing ? "" : " on the map"}.
+                    </>
+                  )}
+                </p>
+              )}
+            </SectionCard>
+
+            <SectionCard id="Photos" n="02" title="Photos" sub="Where they come from">
+              <div>
+                <span className="text-ink-soft text-xs font-medium">
+                  Google Drive folder{folders.length > 1 ? "s" : ""}
+                </span>
+                <div className="mt-1.5 flex flex-col gap-2">
+                  {folders.length === 0 && (
+                    <div className="border-ink/15 flex flex-wrap items-center gap-3 rounded-[10px] border border-dashed bg-white p-3">
+                      <div className="min-w-[140px] flex-1">
+                        <div className="text-ink text-sm font-semibold">No Drive folder yet</div>
+                        <div className="text-ink-soft text-xs">Guests see this page&rsquo;s photos from a folder you pick.</div>
+                      </div>
+                      <button type="button" onClick={() => setPicker({ mode: "add" })} className={buttonClass("primary", "sm")}>
+                        Choose a folder
+                      </button>
+                    </div>
+                  )}
+                  {folders.map((f, i) => {
+                    const thumbs = f.status === "ok" ? (f.files ?? []).map((x) => x.thumb).filter(Boolean).slice(0, 3) : [];
+                    return (
+                      <div
+                        key={f.id}
+                        className={`flex flex-wrap items-center gap-3 rounded-[10px] border bg-white p-3 ${
+                          f.status === "error" ? "border-stamp/40" : "border-ink/15"
+                        }`}
+                      >
+                        <div className="flex shrink-0 gap-[3px]">
+                          {[0, 1, 2].map((k) =>
+                            thumbs[k] ? (
+                              <span key={k} className="h-11 w-11 overflow-hidden rounded" style={{ background: STRIPES }}>
+                                <img
+                                  src={thumbs[k] as string}
+                                  alt=""
+                                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                                  className="h-full w-full object-cover"
+                                />
+                              </span>
+                            ) : (
+                              <span key={k} className="h-11 w-11 rounded" style={{ background: STRIPES }} />
+                            )
+                          )}
+                        </div>
+                        <div className="min-w-[140px] flex-1">
+                          {f.status === "checking" && (
+                            <>
+                              <div className="text-ink text-sm font-semibold">Checking folder…</div>
+                              <div className="text-ink-soft text-xs">Looking it up in Google Drive</div>
+                            </>
+                          )}
+                          {f.status === "ok" && (
+                            <>
+                              <div className="text-ink truncate text-sm font-semibold">{f.name}</div>
+                              <div className="text-teal text-xs">
+                                ✓ {f.files ? `${plural(f.files.length, "photo")} found · ` : ""}Connected
+                              </div>
+                            </>
+                          )}
+                          {f.status === "error" && (
+                            <>
+                              <div className="text-ink text-sm font-semibold">Can&rsquo;t open this folder</div>
+                              <div className="text-stamp text-xs">
+                                {f.message}
+                                {f.reason === "insufficient-scope" && (
+                                  <>
+                                    {" "}
+                                    <button type="button" onClick={reconnect} className="underline">
+                                      Reconnect
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPicker({ mode: "change", index: i })}
+                            className={buttonClass("secondary", "sm")}
+                          >
+                            Change folder
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFolders((prev) => prev.filter((_, j) => j !== i))}
+                            aria-label="Remove folder"
+                            className="text-ink-soft hover:text-stamp flex h-11 w-9 items-center justify-center"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-4 text-[13px] font-medium">
+                  {folders.length > 0 && (
+                    <button type="button" onClick={() => setPicker({ mode: "add" })} className="text-teal min-h-11">
+                      + Add another folder from Drive
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPasteOpen((v) => !v)}
+                    className="text-ink-soft hover:text-teal min-h-11"
+                  >
+                    or paste a link
+                  </button>
+                </div>
+                {pasteOpen && (
+                  <div className="mt-1">
+                    <div className="flex gap-2">
+                      <input
+                        autoFocus
+                        value={pasteValue}
+                        onChange={(e) => setPasteValue(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handlePaste()}
+                        placeholder="https://drive.google.com/drive/folders/…"
+                        className={`${inputClass} mt-0`}
+                      />
+                      <button type="button" onClick={handlePaste} className={buttonClass("secondary", "md", "shrink-0")}>
+                        Add
+                      </button>
+                    </div>
+                    {pasteError && <p className="text-stamp mt-1 text-xs">{pasteError}</p>}
+                  </div>
+                )}
+              </div>
+
+              <div role="radiogroup" aria-label="Which photos to show">
+                <span className="text-ink-soft text-xs font-medium">Which photos to show</span>
+                <div className="mt-1 flex flex-col">
+                  <Radio checked={photoMode === "all"} onSelect={() => setPhotoMode("all")}>
+                    {totalCount === null ? "All photos in the folder" : `All ${plural(totalCount, "photo")} in the folder${folders.length > 1 ? "s" : ""}`}
+                  </Radio>
+                  <Radio checked={photoMode === "sel"} onSelect={() => setPhotoMode("sel")}>
+                    A selection of photos
+                  </Radio>
+                  {photoMode === "sel" && (
+                    <div className="border-teal/25 my-1 ml-2 flex flex-col border-l-2 py-1 pl-[18px]">
+                      <Radio checked={selMode === "rnd"} onSelect={() => setSelMode("rnd")}>
+                        Random set, a fresh one each time
+                      </Radio>
+                      {selMode === "rnd" && (
+                        <label className="text-ink-soft ml-[26px] flex items-center gap-2 pb-1.5 text-[13px]">
+                          Limit to
+                          <input
+                            type="number"
+                            min={1}
+                            value={randomLimit}
+                            onChange={(e) => setRandomLimit(Math.max(1, Number(e.target.value) || 1))}
+                            className="border-ink/15 text-ink min-h-9 w-16 rounded-md border bg-white px-2.5 py-1.5"
+                            suppressHydrationWarning
+                          />
+                          photos
+                        </label>
+                      )}
+                      <Radio checked={selMode === "tag"} onSelect={() => setSelMode("tag")}>
+                        Only photos with a keyword
+                      </Radio>
+                      {selMode === "tag" && (
+                        <label className="text-ink-soft ml-[26px] flex flex-wrap items-center gap-2 pb-1.5 text-[13px]">
+                          Keyword
+                          <input
+                            value={tagKeyword}
+                            onChange={(e) => setTagKeyword(e.target.value)}
+                            placeholder="e.g. best"
+                            className="border-ink/15 text-ink min-h-9 w-36 rounded-md border bg-white px-2.5 py-1.5"
+                            suppressHydrationWarning
+                          />
+                          {shownFiles && keyword && (
+                            <span className="text-ink-soft text-xs">
+                              {plural(shownFiles.length, "match")}
+                            </span>
+                          )}
+                        </label>
+                      )}
+                      {selMode === "tag" && (
+                        <p className="text-ink-soft ml-[26px] text-xs">
+                          Matches words in each photo&rsquo;s description in Google Drive.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard id="Display" n="03" title="Display" sub="How guests see them">
+              <div>
+                <span className="text-ink-soft text-xs font-medium">Display as</span>
+                {effectiveCount !== null && effectiveCount > 0 && (
+                  <p className="text-teal bg-teal/[0.07] mt-1.5 rounded-lg px-3 py-2 text-[13px] leading-normal">
+                    Guests will see {plural(effectiveCount, "photo")}. Suggested layouts are marked.
+                  </p>
+                )}
+                <div
+                  role="radiogroup"
+                  aria-label="Display as"
+                  className="mt-2 grid gap-3"
+                  style={{ gridTemplateColumns: "repeat(auto-fill,minmax(max(140px,calc((100% - 24px) / 3)),1fr))" }}
+                >
+                  {DISPLAY_MODES.map((mode) => {
+                    const selected = displayMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setDisplayMode(mode)}
+                        className="rounded-lg bg-white p-3 text-left"
+                        style={{
+                          border: selected ? "2px solid var(--color-teal)" : "2px solid rgba(34,32,27,.15)",
+                          boxShadow: selected ? "0 2px 6px rgba(31,78,74,.14)" : undefined,
+                        }}
+                      >
+                        <DisplayModeDiagram mode={mode} />
+                        <span className="mt-2.5 flex items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            className="h-[13px] w-[13px] shrink-0 rounded-full bg-white"
+                            style={{ border: selected ? "4px solid var(--color-teal)" : "1.5px solid rgba(34,32,27,.35)" }}
+                          />
+                          <span className={`text-ink text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>
+                            {DISPLAY_MODE_NAME[mode]}
+                          </span>
+                        </span>
+                        <span className="text-ink-soft mt-1 block text-[11.5px] leading-snug">{DISPLAY_MODE_HINT[mode]}</span>
+                        {suggestions.includes(mode) && (
+                          <span className="font-meta-label text-gold border-brass mt-2 inline-block rounded-full border px-2 py-0.5 text-[11px]">
+                            Suggested
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {TIMED_MODES.includes(displayMode) && (
+                  <label className="bg-teal/[0.06] border-teal/20 mt-3 flex items-center gap-2 rounded-lg border px-3.5 py-3 text-sm">
+                    Next photo every
                     <input
                       type="number"
                       min={1}
-                      value={randomLimit}
-                      onChange={(e) => setRandomLimit(Math.max(1, Number(e.target.value) || 1))}
-                      disabled={!randomizeAll}
-                      className="border-ink/15 ml-1 w-16 rounded border bg-white px-2 py-1 text-sm disabled:opacity-40"
+                      value={intervalSec}
+                      onChange={(e) => setIntervalSec(Math.max(1, Number(e.target.value) || 1))}
+                      className="border-ink/15 min-h-9 w-16 rounded border bg-white px-2 py-1 text-sm"
                       suppressHydrationWarning
                     />
+                    seconds
                   </label>
-                </div>
-              )}
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="imageFilter"
-                  checked={imageFilter === "tagged"}
-                  onChange={() => setImageFilter("tagged")}
-                  suppressHydrationWarning
-                />
-                Tagged — keyword:
-                <input
-                  value={tagKeyword}
-                  onChange={(e) => setTagKeyword(e.target.value)}
-                  disabled={imageFilter !== "tagged"}
-                  className="border-ink/15 ml-1 w-28 rounded border bg-white px-2 py-1 text-sm disabled:opacity-40"
-                  suppressHydrationWarning
-                />
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-ink-soft text-xs font-medium">Display as</span>
-            <div className="mt-2 grid grid-cols-2 gap-3 min-[560px]:grid-cols-3">
-              {DISPLAY_MODE_META.map(({ mode, name, hint }) => {
-                const selected = displayMode === mode;
-                return (
-                  <label
-                    key={mode}
-                    className="cursor-pointer rounded-lg bg-white p-3"
-                    style={{
-                      border: selected ? "2px solid var(--color-teal)" : "2px solid rgba(34,32,27,.15)",
-                      boxShadow: selected ? "0 2px 6px rgba(31,78,74,.14)" : undefined,
-                    }}
-                  >
-                    <DisplayModeDiagram mode={mode} />
-                    <div className="mt-2.5 flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="displayMode"
-                        checked={selected}
-                        onChange={() => setDisplayMode(mode)}
-                        className="h-[13px] w-[13px] shrink-0 appearance-none rounded-full bg-white"
-                        style={{
-                          border: selected ? "4px solid var(--color-teal)" : "1.5px solid rgba(34,32,27,.35)",
-                        }}
-                        suppressHydrationWarning
-                      />
-                      <span className={`text-ink text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>
-                        {name}
-                      </span>
-                    </div>
-                    <p className="text-ink-soft mt-1 text-[11.5px]">{hint}</p>
-                  </label>
-                );
-              })}
-            </div>
-
-            {(displayMode === "slideshow" || displayMode === "gallery") && (
-              <div
-                className="mt-3 flex items-center gap-2 rounded-lg text-sm"
-                style={{
-                  background: "rgba(31,78,74,.06)",
-                  border: "1px solid rgba(31,78,74,.18)",
-                  padding: "12px 14px",
-                }}
-              >
-                Time lapse:
-                <input
-                  type="number"
-                  min={1}
-                  value={slideshowIntervalSec}
-                  onChange={(e) =>
-                    setSlideshowIntervalSec(Math.max(1, Number(e.target.value) || 1))
-                  }
-                  className="border-ink/15 w-16 rounded border bg-white px-2 py-1 text-sm"
-                  suppressHydrationWarning
-                />
-                sec
+                )}
               </div>
-            )}
+
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-ink-soft text-xs font-medium">Preview · {DISPLAY_MODE_NAME[displayMode]}</span>
+                  <span className="bg-ink/10 h-px flex-1" />
+                </div>
+                <div className="mt-2">
+                  <DisplayModePreview mode={displayMode} thumbs={previewThumbs} />
+                </div>
+                {PREVIEW_NOTE[displayMode] && (
+                  <p className="text-ink-soft mt-2 text-xs">{PREVIEW_NOTE[displayMode]}</p>
+                )}
+              </div>
+            </SectionCard>
+
+            <SectionCard id="Link" n="04" title="Link" sub="Share this page directly">
+              {nfcSlug ? (
+                <div>
+                  <span className="text-ink-soft text-xs font-medium">Page Link</span>
+                  <p className="font-meta text-ink mt-1.5 truncate text-[13px]">
+                    {host}/p/{nfcSlug}
+                  </p>
+                  <button type="button" onClick={handleCopyLink} className={buttonClass("secondary", "sm", "mt-3")}>
+                    Copy link
+                  </button>
+                  <p className="text-ink-soft mt-2 text-xs">Write this link to the page&rsquo;s NFC tag.</p>
+                </div>
+              ) : (
+                <p className="text-ink-soft text-sm">Save this page to create its link.</p>
+              )}
+            </SectionCard>
           </div>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-teal rounded-full py-3 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {saving ? "Saving…" : "Save page"}
-          </button>
-
-          {nfcSlug ? (
-            <div className="border-ink/10 rounded-card border-t pt-5">
-              <span className="text-ink-soft text-xs font-medium">NFC link</span>
-              <p className="font-meta-label text-ink mt-1.5 truncate text-sm">
-                {host}/p/{nfcSlug}
-              </p>
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className="border-teal text-teal mt-3 rounded-full border px-4 py-1.5 text-sm font-medium"
-              >
-                Copy link
-              </button>
-            </div>
-          ) : (
-            <p className="text-ink-soft border-ink/10 border-t pt-5 text-xs">
-              Save this page to generate its NFC link.
-            </p>
-          )}
         </div>
       </div>
+
+      <div className="bg-paper/95 border-ink/10 sticky bottom-0 z-10 flex justify-center border-t px-5 pb-4 pt-3 shadow-[0_-6px_18px_rgba(34,32,27,0.1)] sm:px-8">
+        <div className="flex w-full max-w-[720px] gap-3">
+          <button type="button" onClick={handleCancel} className={buttonClass("ghost", "lg", "flex-none")}>
+            Cancel
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving} className={buttonClass("primary", "lg", "flex-1")}>
+            {saving ? "Saving…" : "Save page"}
+          </button>
+        </div>
+      </div>
+
+      {picker && (
+        <DriveFolderPicker
+          onClose={() => setPicker(null)}
+          onPick={(folder) => {
+            addFolder(folder.id, picker.mode === "change" ? picker.index : undefined);
+            setPicker(null);
+          }}
+        />
+      )}
+
+      {confirmDiscard && (
+        <Dialog
+          title="Discard your changes?"
+          onClose={() => setConfirmDiscard(false)}
+          compact
+          maxWidth={400}
+          footer={
+            <div className="flex justify-end gap-2.5">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className={buttonClass("ghost", "md")}>
+                Keep editing
+              </button>
+              <Link href={albumHref} className={buttonClass("danger", "md")}>
+                Discard
+              </Link>
+            </div>
+          }
+        >
+          <p className="text-ink-soft mt-2.5 text-sm leading-relaxed">
+            You have unsaved changes on this page. Leaving now loses them.
+          </p>
+        </Dialog>
+      )}
 
       <Toast message={toast} />
     </main>

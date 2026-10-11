@@ -25,7 +25,12 @@ export type DisplayMode =
   | "contact"
   | "stack"
   | "scrapbook"
-  | "gallery";
+  | "gallery"
+  | "filmstrip"
+  | "polaroid"
+  | "reel"
+  | "mosaic"
+  | "hero";
 
 export type Page = {
   id: string;
@@ -48,8 +53,7 @@ export type Page = {
   randomizeAll: boolean;
   randomLimit: number;
   displayMode: DisplayMode;
-  /** Slideshow auto-advance delay, in seconds. Only meaningful when
-   *  displayMode === "slideshow". */
+  /** Auto-advance delay, in seconds, for the slideshow and story reel modes. */
   slideshowIntervalSec: number;
   createdAt: string;
   updatedAt: string;

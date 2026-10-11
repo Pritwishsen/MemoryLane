@@ -3,19 +3,13 @@ import { requireSession } from "@/lib/session";
 import { assignSlugIfMissing, deletePage, getOwnedAlbum, getPage, updatePage } from "@/lib/albums";
 import { parseDriveFolderId } from "@/lib/drive";
 import { geocodeLocation } from "@/lib/geocode";
+import { DISPLAY_MODE_NAME } from "@/lib/displayModes";
 import type { ImageFilter, DisplayMode, Page } from "@/types/models";
 
 type RouteContext = { params: Promise<{ albumId: string; pageId: string }> };
 
 const IMAGE_FILTERS: ImageFilter[] = ["all", "tagged"];
-const DISPLAY_MODES: DisplayMode[] = [
-  "grid",
-  "slideshow",
-  "contact",
-  "stack",
-  "scrapbook",
-  "gallery",
-];
+const DISPLAY_MODES = Object.keys(DISPLAY_MODE_NAME) as DisplayMode[];
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const { session, unauthorized } = await requireSession();

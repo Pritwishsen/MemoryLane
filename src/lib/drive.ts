@@ -186,7 +186,7 @@ export function driveImageUrl(thumbnailLink: string, size = 1600): string {
   return thumbnailLink.replace(/=s\d+$/, `=s${size}`);
 }
 
-type FolderImageFile = { id: string; parents?: string[]; thumbnailLink?: string; description?: string };
+export type FolderImageFile = { id: string; name?: string; parents?: string[]; thumbnailLink?: string; description?: string };
 
 /** Every image across the given folders, attributed to each folder it sits
  *  in. Paginates and chunks the parents clause, so one call covers a whole
@@ -204,7 +204,7 @@ export async function listImagesByFolder(
     do {
       const data = await driveFetch(accessToken, "", {
         q: `(${parentClause}) and mimeType contains 'image/' and trashed = false`,
-        fields: "nextPageToken,files(id,parents,thumbnailLink,description)",
+        fields: "nextPageToken,files(id,name,parents,thumbnailLink,description)",
         orderBy: "name",
         pageSize: "1000",
         ...(pageToken ? { pageToken } : {}),
@@ -289,4 +289,82 @@ export async function deletePermission(accessToken: string, folderId: string, pe
     if (err instanceof DriveApiError && err.status === 404) return;
     throw err;
   }
+}
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+export type DriveFolder = { id: string; name: string };
+
+/** Sub-folders of a folder, or the top level of "My Drive" ("root") or
+ *  "Shared with me" ("shared"), sorted by name. Capped at 500. */
+export async function listChildFolders(accessToken: string, parent: string): Promise<DriveFolder[]> {
+  const scope = parent === "shared" ? "sharedWithMe" : `'${parent}' in parents`;
+  const folders: DriveFolder[] = [];
+  let pageToken: string | undefined;
+  do {
+    const data = await driveFetch(accessToken, "", {
+      q: `${scope} and mimeType = '${FOLDER_MIME}' and trashed = false`,
+      fields: "nextPageToken,files(id,name)",
+      orderBy: "name",
+      pageSize: "200",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    folders.push(...((data.files ?? []) as DriveFolder[]));
+    pageToken = data.nextPageToken;
+  } while (pageToken && folders.length < 500);
+  return folders;
+}
+
+/** Path from the top of the host's Drive down to `folderId` (inclusive).
+ *  Folders shared by someone else stop at the first parent the host can't
+ *  see, so their path starts at "Shared with me". */
+export async function getFolderBreadcrumb(accessToken: string, folderId: string): Promise<DriveFolder[]> {
+  const trail: DriveFolder[] = [];
+  let id: string | undefined = folderId;
+  for (let depth = 0; id && depth < 10; depth++) {
+    let data: { id: string; name: string; parents?: string[] };
+    try {
+      data = await driveFetch(accessToken, `/${id}`, { fields: "id,name,parents" });
+    } catch {
+      break;
+    }
+    if (!data.parents?.length) {
+      // Reached the top: the host's own root is "My Drive".
+      trail.unshift({ id: "root", name: "My Drive" });
+      return trail;
+    }
+    trail.unshift({ id: data.id, name: data.name });
+    id = data.parents[0];
+  }
+  trail.unshift({ id: "shared", name: "Shared with me" });
+  return trail;
+}
+
+export type FolderStats = { count: number; capped: boolean; thumb: string | null };
+
+/** Photo count (capped at 1000, flagged) and first thumbnail per folder, one
+ *  small query per folder with limited concurrency. Fast enough for a picker
+ *  row; use listImagesByFolder when exact totals matter. */
+export async function folderStats(accessToken: string, folderIds: string[]): Promise<Record<string, FolderStats | null>> {
+  const out: Record<string, FolderStats | null> = {};
+  const queue = [...new Set(folderIds)];
+  async function worker() {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try {
+        const data = await driveFetch(accessToken, "", {
+          q: `'${id}' in parents and mimeType contains 'image/' and trashed = false`,
+          fields: "nextPageToken,files(id,thumbnailLink)",
+          orderBy: "name",
+          pageSize: "1000",
+        });
+        const files: { id: string; thumbnailLink?: string }[] = data.files ?? [];
+        const thumb = files.find((f) => f.thumbnailLink)?.thumbnailLink;
+        out[id] = { count: files.length, capped: Boolean(data.nextPageToken), thumb: thumb ? driveImageUrl(thumb, 120) : null };
+      } catch {
+        out[id] = null;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker));
+  return out;
 }

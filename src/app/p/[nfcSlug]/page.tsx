@@ -22,18 +22,10 @@ import PhotoContactSheet from "@/components/PhotoContactSheet";
 import PhotoStack from "@/components/PhotoStack";
 import PhotoScrapbook from "@/components/PhotoScrapbook";
 import PhotoGallery from "@/components/PhotoGallery";
+import { DISPLAY_MODE_NAME } from "@/lib/displayModes";
 import type { DisplayMode } from "@/types/models";
 
 type PageProps = { params: Promise<{ nfcSlug: string }> };
-
-const DISPLAY_MODE_LABEL: Record<DisplayMode, string> = {
-  grid: "GRID",
-  slideshow: "SLIDESHOW",
-  contact: "CONTACT SHEET",
-  stack: "STACK",
-  scrapbook: "SCRAPBOOK",
-  gallery: "GALLERY",
-};
 
 // Single-photo modes show one photo prominently at a time and get the full
 // 1600px image; multi-photo modes render many at once and stay at 800px.
@@ -184,7 +176,7 @@ export default async function TagPage({ params }: PageProps) {
             <span
               className="font-meta-label text-gold shrink-0 text-[11px]"
             >
-              {DISPLAY_MODE_LABEL[page.displayMode]}
+              {DISPLAY_MODE_NAME[page.displayMode] ?? "Grid"}
             </span>
           </div>
         ) : (
