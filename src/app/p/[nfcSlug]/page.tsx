@@ -13,6 +13,7 @@ import {
   type DriveImage,
 } from "@/lib/drive";
 import SignInScreen from "@/components/SignInScreen";
+import DriveAccessPrompt from "@/components/DriveAccessPrompt";
 import AccountBadge from "@/components/AccountBadge";
 import Postmark from "@/components/Postmark";
 import FittedPostmark from "@/components/FittedPostmark";
@@ -77,13 +78,13 @@ export default async function TagPage({ params }: PageProps) {
   let photos: DisplayPhoto[] = [];
   let photoError: string | null = null;
   let accessDenied = false;
+  // The guest's own sign-in can't read Drive at all (consent box unticked,
+  // or an expired grant): offer a one-click re-consent instead of an error.
+  let needsDriveConsent: "missing" | "expired" | null = null;
 
   if (folderIds.length > 0) {
     if (session.error || !session.accessToken) {
-      photoError =
-        session.error === "InsufficientScopeError"
-          ? "Your Google sign-in doesn't have Drive access yet — try signing out and back in."
-          : "There was a problem with your Google sign-in — try signing out and back in.";
+      needsDriveConsent = session.error === "InsufficientScopeError" ? "missing" : "expired";
     } else {
       try {
         // Feature 6, the security-critical check: files.get on the folder
@@ -136,7 +137,7 @@ export default async function TagPage({ params }: PageProps) {
 
   const host = accessDenied ? await getUserById(album.ownerUid) : null;
 
-  const showMetaRule = !accessDenied && !photoError;
+  const showMetaRule = !accessDenied && !photoError && !needsDriveConsent;
 
   return (
     <main className={`flex-1 px-5 py-8 sm:px-8 ${nextPage ? "pb-[90px]" : ""}`}>
@@ -194,6 +195,8 @@ export default async function TagPage({ params }: PageProps) {
             This album isn&rsquo;t shared with you yet. Ask {host?.name ?? "the host"} to
             share the Google Drive folder for this page.
           </p>
+        ) : needsDriveConsent ? (
+          <DriveAccessPrompt callbackUrl={`/p/${nfcSlug}`} expired={needsDriveConsent === "expired"} />
         ) : photoError ? (
           <p className="text-stamp text-sm">{photoError}</p>
         ) : photos.length === 0 ? (
