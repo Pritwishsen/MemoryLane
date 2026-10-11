@@ -580,7 +580,7 @@ function ZoomAwarePins({
           <span className="text-ink text-[12.5px] font-semibold">
             {selectedCountryGroup.country}
           </span>
-          <span className="font-meta-label text-ink-soft text-[9.5px]">
+          <span className="font-meta-label text-ink-soft text-[11px]">
             {selectedCountryPlaceCount} {selectedCountryPlaceCount === 1 ? "PLACE" : "PLACES"}
           </span>
         </div>
@@ -630,7 +630,7 @@ function ZoomAwarePins({
             style={{ background: "rgba(34,32,27,.2)" }}
           />
           <p className="font-display text-ink text-base font-semibold">{selectedPlace.label}</p>
-          <p className="font-meta-label text-ink-soft mt-0.5 text-[9.5px]">
+          <p className="font-meta-label text-ink-soft mt-0.5 text-[11px]">
             {selectedPlace.pages.length} {selectedPlace.pages.length === 1 ? "PAGE" : "PAGES"}
             {selectedPlace.pages[0] ? ` · ${selectedPlace.pages[0].albumTitle}` : ""}
           </p>

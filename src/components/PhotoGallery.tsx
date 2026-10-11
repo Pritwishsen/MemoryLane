@@ -51,7 +51,7 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
             type="button"
             onClick={() => goToPage(windowStart - RAIL_LIMIT)}
             aria-label={`Show ${hiddenBefore} earlier photos`}
-            className="font-meta-label flex shrink-0 items-center justify-center rounded-[3px] text-[9px]"
+            className="font-meta-label flex shrink-0 items-center justify-center rounded-[3px] text-[11px]"
             style={{ width: 30, height: 54, background: "#E7DFCC", color: "var(--color-ink-soft)" }}
           >
             +{hiddenBefore}
@@ -82,7 +82,7 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
             type="button"
             onClick={() => goToPage(windowStart + RAIL_LIMIT)}
             aria-label={`Show ${hiddenAfter} more photos`}
-            className="font-meta-label flex shrink-0 items-center justify-center rounded-[3px] text-[9px]"
+            className="font-meta-label flex shrink-0 items-center justify-center rounded-[3px] text-[11px]"
             style={{ width: 30, height: 54, background: "#E7DFCC", color: "var(--color-ink-soft)" }}
           >
             +{hiddenAfter}

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { backLinkClass } from "@/components/ui/styles";
 import { authOptions } from "@/lib/authOptions";
 import { getAlbum, listPages } from "@/lib/albums";
 import { markInviteOpened } from "@/lib/invites";
@@ -66,7 +67,7 @@ export default async function GuestSummaryPage({ params, searchParams }: PagePro
     <main className="flex-1 px-5 py-6 sm:px-8">
       <div className="mx-auto w-full max-w-[480px]">
         <div className="flex items-center justify-between">
-          <Link href="/guest" className="font-meta-label text-ink-soft hover:text-ink text-[9.5px]">
+          <Link href="/guest" className={backLinkClass}>
             ← Your albums
           </Link>
           <AccountBadge

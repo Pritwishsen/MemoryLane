@@ -8,6 +8,13 @@
   --color-teal: #1f4e4a;
   --color-brass: #b58a46;
   --color-stamp: #a6402c;
+  /* Small gold text (meta counts, chevrons, eyebrows). Brass #b58a46 is too
+     light for text at 11-13px; keep brass for rings/borders only. */
+  --color-gold: #8a6a2e;
+  /* Guest status chip backgrounds. */
+  --color-chip-invited: #ece6d8;
+  --color-chip-viewed: #d5e3de;
+  --color-chip-needs: #f4ddd6;
 }
 
 @theme inline {
@@ -18,6 +25,10 @@
   --color-teal: var(--color-teal);
   --color-brass: var(--color-brass);
   --color-stamp: var(--color-stamp);
+  --color-gold: var(--color-gold);
+  --color-chip-invited: var(--color-chip-invited);
+  --color-chip-viewed: var(--color-chip-viewed);
+  --color-chip-needs: var(--color-chip-needs);
 
   --font-display: var(--font-fraunces);
   --font-body: var(--font-inter);

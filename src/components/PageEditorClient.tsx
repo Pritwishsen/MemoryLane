@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { backLinkClass } from "@/components/ui/styles";
+import Toast, { useToast } from "@/components/ui/Toast";
 import { signOut } from "next-auth/react";
 import AccountBadge from "./AccountBadge";
 import { countryToIso2 } from "@/lib/countries";
@@ -177,16 +179,11 @@ export default function PageEditorClient({
 
   const [nfcSlug, setNfcSlug] = useState(page.nfcSlug);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useToast();
   const [driveChecks, setDriveChecks] = useState<DriveCheckState[]>(
     initialFolders.map((f) => (f ? { status: "checking" } : { status: "idle" }))
   );
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   useEffect(() => {
     if (page.driveFolderIds?.length) {
@@ -320,7 +317,7 @@ export default function PageEditorClient({
         <div className="flex items-center justify-between">
           <Link
             href={`/dashboard/${albumId}`}
-            className="font-meta-label text-ink-soft hover:text-ink"
+            className={backLinkClass}
           >
             ← Back to album
           </Link>
@@ -620,11 +617,7 @@ export default function PageEditorClient({
         </div>
       </div>
 
-      {toast && (
-        <div className="bg-ink font-meta-label fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-xs text-white shadow-lg">
-          {toast}
-        </div>
-      )}
+      <Toast message={toast} />
     </main>
   );
 }

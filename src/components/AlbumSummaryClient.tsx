@@ -37,8 +37,8 @@ export default function AlbumSummaryClient({ pins, rows }: AlbumSummaryClientPro
       )}
 
       <div className="mt-5 flex items-center justify-between">
-        <span className="font-meta-label text-ink-soft text-[9.5px]">Pages in order</span>
-        <span className="font-meta-label text-[9.5px]" style={{ color: "var(--color-brass)" }}>
+        <span className="font-meta-label text-ink-soft text-[11px]">Pages in order</span>
+        <span className="font-meta-label text-gold text-[11px]">
           {rows.length}
         </span>
       </div>
@@ -66,7 +66,7 @@ export default function AlbumSummaryClient({ pins, rows }: AlbumSummaryClientPro
                 <span className="text-ink min-w-0 flex-1 truncate text-[14px]">{row.header}</span>
                 <span
                   className="shrink-0 text-[15px]"
-                  style={{ color: "var(--color-brass)", fontFamily: "var(--font-body)" }}
+                  style={{ color: "var(--color-gold)", fontFamily: "var(--font-body)" }}
                 >
                   ›
                 </span>

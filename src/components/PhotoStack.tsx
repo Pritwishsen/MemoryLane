@@ -69,7 +69,7 @@ export default function PhotoStack({ photos, place }: PhotoStackProps) {
               </div>
               {isFront && (
                 <p
-                  className="mt-2 text-center text-[10px]"
+                  className="mt-2 text-center text-[11px]"
                   style={{
                     fontFamily: "var(--font-meta)",
                     letterSpacing: "0.06em",
@@ -86,8 +86,8 @@ export default function PhotoStack({ photos, place }: PhotoStackProps) {
         })}
       </div>
       <p
-        className="font-meta-label mt-3 text-center text-[9px]"
-        style={{ color: "var(--color-brass)", letterSpacing: "0.12em" }}
+        className="font-meta-label text-gold mt-3 text-center text-[11px]"
+        style={{ letterSpacing: "0.12em" }}
       >
         Swipe to deal the next print
       </p>

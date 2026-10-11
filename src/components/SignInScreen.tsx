@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { backLinkClass } from "@/components/ui/styles";
 import { signIn } from "next-auth/react";
 import GoogleGlyph from "./GoogleGlyph";
 
@@ -32,7 +33,7 @@ export default function SignInScreen({ variant, callbackUrl }: SignInScreenProps
       <div className="w-full max-w-[480px]">
         <Link
           href="/"
-          className="font-meta-label text-ink-soft hover:text-ink inline-block"
+          className={backLinkClass}
         >
           ← Back
         </Link>

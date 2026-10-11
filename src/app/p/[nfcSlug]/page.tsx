@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { backLinkClass } from "@/components/ui/styles";
 import { authOptions } from "@/lib/authOptions";
 import { getPageBySlug, listPages } from "@/lib/albums";
 import { getUserById } from "@/lib/users";
@@ -140,7 +141,7 @@ export default async function TagPage({ params }: PageProps) {
         <div className="flex items-center justify-between">
           <Link
             href={`/guest/${album.id}/summary`}
-            className="font-meta-label text-ink-soft hover:text-ink"
+            className={backLinkClass}
           >
             ← Summary
           </Link>
@@ -158,7 +159,7 @@ export default async function TagPage({ params }: PageProps) {
               {page.header}
             </h1>
             {locationLine && (
-              <p className="font-meta-label text-teal mt-[7px] text-[9.5px]">{locationLine}</p>
+              <p className="font-meta-label text-teal mt-[7px] text-[11px]">{locationLine}</p>
             )}
           </div>
         </div>
@@ -171,13 +172,12 @@ export default async function TagPage({ params }: PageProps) {
 
         {showMetaRule ? (
           <div className="mt-6 flex items-center gap-[10px]">
-            <span className="font-meta-label text-ink-soft shrink-0 text-[9.5px]">
+            <span className="font-meta-label text-ink-soft shrink-0 text-[11px]">
               {photos.length} {photos.length === 1 ? "PHOTO" : "PHOTOS"}
             </span>
             <span className="h-px flex-1" style={{ background: "rgba(34,32,27,.12)" }} />
             <span
-              className="font-meta-label shrink-0 text-[9.5px]"
-              style={{ color: "var(--color-brass)" }}
+              className="font-meta-label text-gold shrink-0 text-[11px]"
             >
               {DISPLAY_MODE_LABEL[page.displayMode]}
             </span>
@@ -240,14 +240,14 @@ export default async function TagPage({ params }: PageProps) {
             />
             <div className="min-w-0 flex-1">
               <p
-                className="font-meta-label text-ink-soft text-[8.5px]"
+                className="font-meta-label text-ink-soft text-[11px]"
                 style={{ letterSpacing: "0.1em" }}
               >
                 Next in this album
               </p>
               <p className="text-ink truncate text-[13.5px]">{nextPage.header}</p>
             </div>
-            <span className="shrink-0 text-[15px]" style={{ color: "var(--color-brass)" }}>
+            <span className="text-gold shrink-0 text-[15px]">
               ›
             </span>
           </Link>

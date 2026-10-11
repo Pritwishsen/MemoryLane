@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { backLinkClass } from "@/components/ui/styles";
+import Toast, { useToast } from "@/components/ui/Toast";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -43,18 +45,13 @@ export default function AlbumEditorClient({
   const [pages, setPages] = useState(initialPages);
   const [addingPage, setAddingPage] = useState(false);
   const [newPageId, setNewPageId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useToast();
   const [confirmingDeleteAlbum, setConfirmingDeleteAlbum] = useState(false);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
   const [inviting, setInviting] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   useEffect(() => {
     if (!newPageId) return;
@@ -139,8 +136,8 @@ export default function AlbumEditorClient({
     <main className="flex-1 px-5 py-6 sm:px-8">
       <div className="mx-auto w-full max-w-[720px]">
         <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="font-meta-label text-ink-soft hover:text-ink">
-            ← Albums
+          <Link href="/dashboard" className={backLinkClass}>
+            ← Your albums
           </Link>
           <AccountBadge name={userName} image={userImage} email={userEmail} />
         </div>
@@ -283,11 +280,7 @@ export default function AlbumEditorClient({
         />
       )}
 
-      {toast && (
-        <div className="bg-ink font-meta-label fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-4 py-2 text-xs text-white shadow-lg">
-          {toast}
-        </div>
-      )}
+      <Toast message={toast} />
     </main>
   );
 }

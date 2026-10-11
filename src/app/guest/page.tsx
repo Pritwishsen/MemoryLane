@@ -52,7 +52,7 @@ export default async function GuestPage() {
     <main className="flex-1 px-5 py-8 sm:px-8">
       <div className="mx-auto w-full max-w-[480px]">
         <div className="flex items-center justify-between">
-          <span className="font-meta-label text-ink-soft text-[10px] tracking-[0.14em]">
+          <span className="font-meta-label text-ink-soft text-[11px] tracking-[0.14em]">
             MemoryLane
           </span>
           <AccountBadge
@@ -79,7 +79,7 @@ export default async function GuestPage() {
                 border: "1px solid rgba(34,32,27,.14)",
               }}
             >
-              <span className="font-meta-label text-ink-soft text-[9.5px]">
+              <span className="font-meta-label text-ink-soft text-[11px]">
                 {totalCountries} {totalCountries === 1 ? "COUNTRY" : "COUNTRIES"} · {totalPlaces}{" "}
                 {totalPlaces === 1 ? "PLACE" : "PLACES"}
               </span>
@@ -101,7 +101,7 @@ export default async function GuestPage() {
                 <AlbumFlagCluster countries={countries} />
                 <p className="font-display text-ink min-w-0 flex-1 truncate text-[13px] font-semibold">
                   {album.title}
-                  <span className="font-meta-label text-ink-soft ml-[6px] font-normal text-[9px]">
+                  <span className="font-meta-label text-ink-soft ml-[6px] font-normal text-[11px]">
                     · {pageCount} {pageCount === 1 ? "PAGE" : "PAGES"}
                     {countries.length > 0 ? ` · ${countries.join(", ")}` : ""}
                     {albumMonth(album.createdAt) ? ` · ${albumMonth(album.createdAt)}` : ""}
@@ -109,7 +109,7 @@ export default async function GuestPage() {
                 </p>
                 <span
                   className="shrink-0 text-[15px]"
-                  style={{ color: "var(--color-brass)", fontFamily: "var(--font-body)" }}
+                  style={{ color: "var(--color-gold)", fontFamily: "var(--font-body)" }}
                 >
                   ›
                 </span>
