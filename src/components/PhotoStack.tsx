@@ -89,7 +89,7 @@ export default function PhotoStack({ photos, place }: PhotoStackProps) {
         className="font-meta-label text-gold mt-3 text-center text-[11px]"
         style={{ letterSpacing: "0.12em" }}
       >
-        Swipe to deal the next print
+        Tap the print to flip to the next
       </p>
     </div>
   );

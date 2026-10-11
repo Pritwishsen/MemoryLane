@@ -367,3 +367,16 @@ body {
     transition: none;
   }
 }
+
+/* Story reel: the active progress segment fills over the page's interval;
+   its animationend advances the reel (see PhotoStoryReel). */
+@keyframes reel-fill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+.reel-fill {
+  width: 0%;
+  animation-name: reel-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}

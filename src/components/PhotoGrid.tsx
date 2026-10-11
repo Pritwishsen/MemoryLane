@@ -4,7 +4,13 @@ import { useState } from "react";
 import Image from "next/image";
 import PhotoLightbox from "./PhotoLightbox";
 
-export type DisplayPhoto = { id: string; name: string; url: string };
+export type DisplayPhoto = {
+  id: string;
+  name: string;
+  url: string;
+  /** Width / height, when Drive knows it (used by Mosaic). */
+  aspect?: number;
+};
 
 type PhotoGridProps = { photos: DisplayPhoto[] };
 

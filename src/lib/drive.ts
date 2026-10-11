@@ -5,6 +5,10 @@ export type DriveImage = {
   name: string;
   thumbnailLink: string;
   description?: string;
+  /** Pixel size as Drive reports it (already swapped for 90°/270° EXIF
+   *  rotation by listDriveImages), for layouts that need aspect ratios. */
+  width?: number;
+  height?: number;
 };
 
 const FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
@@ -151,13 +155,28 @@ export async function listDriveImages(
   const parentClause = folderIds.map((id) => `'${id}' in parents`).join(" or ");
   const q = `(${parentClause}) and mimeType contains 'image/' and trashed = false`;
 
-  const data = await driveFetch(accessToken, "", {
-    q,
-    fields: "files(id,name,thumbnailLink,description)",
-    pageSize: "1000",
-  });
+  // Follow nextPageToken: a single call silently stopped at 1000 files.
+  type Raw = Omit<DriveImage, "width" | "height"> & {
+    imageMediaMetadata?: { width?: number; height?: number; rotation?: number };
+  };
+  const raw: Raw[] = [];
+  let pageToken: string | undefined;
+  do {
+    const data = await driveFetch(accessToken, "", {
+      q,
+      fields: "nextPageToken,files(id,name,thumbnailLink,description,imageMediaMetadata(width,height,rotation))",
+      orderBy: "name",
+      pageSize: "1000",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    raw.push(...((data.files ?? []) as Raw[]));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
 
-  let files: DriveImage[] = data.files ?? [];
+  let files: DriveImage[] = raw.map(({ imageMediaMetadata: m, ...rest }) => {
+    const sideways = m?.rotation === 1 || m?.rotation === 3;
+    return { ...rest, width: sideways ? m?.height : m?.width, height: sideways ? m?.width : m?.height };
+  });
   if (filter === "tagged" && tagKeyword.trim()) {
     const keyword = tagKeyword.trim().toLowerCase();
     files = files.filter((f) => f.description?.toLowerCase().includes(keyword));

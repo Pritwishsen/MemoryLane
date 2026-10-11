@@ -18,6 +18,11 @@ import Postmark from "@/components/Postmark";
 import FittedPostmark from "@/components/FittedPostmark";
 import PhotoGrid, { type DisplayPhoto } from "@/components/PhotoGrid";
 import PhotoSlideshow from "@/components/PhotoSlideshow";
+import PhotoFilmstrip from "@/components/PhotoFilmstrip";
+import PhotoPolaroidWall from "@/components/PhotoPolaroidWall";
+import PhotoStoryReel from "@/components/PhotoStoryReel";
+import PhotoMosaic from "@/components/PhotoMosaic";
+import PhotoHeroStrip from "@/components/PhotoHeroStrip";
 import PhotoContactSheet from "@/components/PhotoContactSheet";
 import PhotoStack from "@/components/PhotoStack";
 import PhotoScrapbook from "@/components/PhotoScrapbook";
@@ -29,7 +34,7 @@ type PageProps = { params: Promise<{ nfcSlug: string }> };
 
 // Single-photo modes show one photo prominently at a time and get the full
 // 1600px image; multi-photo modes render many at once and stay at 800px.
-const SINGLE_PHOTO_MODES: DisplayMode[] = ["slideshow", "stack", "gallery"];
+const SINGLE_PHOTO_MODES: DisplayMode[] = ["slideshow", "stack", "gallery", "reel", "hero"];
 
 function shuffle<T>(items: T[]): T[] {
   const result = [...items];
@@ -120,6 +125,7 @@ export default async function TagPage({ params }: PageProps) {
             id: img.id,
             name: img.name,
             url: driveImageUrl(img.thumbnailLink, imageSize),
+            ...(img.width && img.height ? { aspect: img.width / img.height } : {}),
           }));
         }
       } catch {
@@ -213,6 +219,26 @@ export default async function TagPage({ params }: PageProps) {
         ) : page.displayMode === "gallery" ? (
           <div className="mt-4">
             <PhotoGallery photos={photos} />
+          </div>
+        ) : page.displayMode === "filmstrip" ? (
+          <div className="mt-4">
+            <PhotoFilmstrip photos={photos} />
+          </div>
+        ) : page.displayMode === "polaroid" ? (
+          <div className="mt-4">
+            <PhotoPolaroidWall photos={photos} />
+          </div>
+        ) : page.displayMode === "reel" ? (
+          <div className="mt-4">
+            <PhotoStoryReel photos={photos} intervalSec={page.slideshowIntervalSec} />
+          </div>
+        ) : page.displayMode === "mosaic" ? (
+          <div className="mt-4">
+            <PhotoMosaic photos={photos} />
+          </div>
+        ) : page.displayMode === "hero" ? (
+          <div className="mt-4">
+            <PhotoHeroStrip photos={photos} />
           </div>
         ) : (
           <div className="mt-4">
